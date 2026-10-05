@@ -2,7 +2,8 @@
 import { config, isLang } from '@/lib/config';
 import { insert, sourcesByIds, sb, type Chunk } from '@/lib/db';
 import { t } from '@/lib/i18n';
-import { embedOne, enforceCitations, findVerified, generate, retrieve, translateStrings, understand, verifyWithModel, type Gen, type VerifyItem } from './steps';
+import { embed } from '@/lib/models';
+import { enforceCitations, findVerified, generate, retrieve, translateStrings, understand, verifyWithModel, type Gen, type VerifyItem } from './steps';
 import type { Answer, AskInput, SourceRef, StageCb, Understanding } from './types';
 
 const DEADLINE_MS = 50_000; // the platform limit is 60 s
@@ -56,7 +57,8 @@ export async function ask(input: AskInput, onStage: StageCb = () => {}): Promise
   // Gate 1: scope.
   if (!u.in_scope || !u.q_en.trim()) { a.tier = 'out_of_scope'; a.notice = t(outLang, 'n_out'); return done(); }
 
-  const qEmb = await timed('embed', () => embedOne(u.q_en));
+  // One call embeds the question in both pivot languages.
+  const [qEmb, qArEmb] = await timed('embed', async () => { const v = await embed(u.q_ar.trim() ? [u.q_en, u.q_ar] : [u.q_en]); return [v[0], v[1] ?? null] as const; });
 
   // Gate 2: verified-answer memory (skipped for personal cases, which always go to a specialist).
   if (!u.personal_case) {
@@ -71,7 +73,7 @@ export async function ask(input: AskInput, onStage: StageCb = () => {}): Promise
         text = tr.out[0]; a.approx_translation = tr.approx;
         if (!tr.approx) { try { await sb().from('verified_answers').update({ translations: { ...(va.translations ?? {}), [outLang]: text } }).eq('id', va.id); } catch { /* cache only */ } }
       }
-      a.tier = 'verified'; a.summary = text; a.notice = t(outLang, va.code?.startsWith('PC-') ? 'n_published' : 'n_verified');
+      a.tier = 'verified'; a.summary = text; a.notice = t(outLang, va.code?.startsWith('PC-') ? 'n_published' : va.code?.startsWith('DR-') ? 'n_dorar' : 'n_verified');
       a.verified = { code: va.code, author: va.author_name, source_title: va.source_title, source_locator: va.source_locator, source_quote: va.source_quote };
       a.flags.va_similarity = va.similarity; a.flags.va_reason = hit.reason;
       return done([], va.id);
@@ -80,7 +82,7 @@ export async function ask(input: AskInput, onStage: StageCb = () => {}): Promise
 
   // Gate 3: answerability. No generation without enough context.
   onStage('retrieve');
-  const r = await timed('retrieve', () => retrieve(u.q_en, qEmb));
+  const r = await timed('retrieve', () => retrieve(u.q_en, qEmb, qArEmb));
   a.flags.best_similarity = Number(r.bestSim.toFixed(3));
   const refer = async (reason: string, chunkIds: string[] = []) => {
     a.tier = 'referred'; a.flags.refer_reason = reason;
@@ -141,7 +143,9 @@ export async function ask(input: AskInput, onStage: StageCb = () => {}): Promise
   const numberOf = new Map<string, number>();
   const sources: SourceRef[] = usedIds.map((id, i) => {
     const c = byId.get(id)!; const s = srcMeta[c.source_id]; numberOf.set(id, i + 1);
-    return { n: i + 1, chunk_id: id, title: s?.title ?? c.source_id, author: s?.author ?? null, page: c.page, path: c.path, excerpt: clip(c.text, 520), url: s?.url ?? null };
+    // An online reference stores the address pattern of its pages; a book stores page numbers.
+    const web = !!s?.url && s.url.includes('{page}');
+    return { n: i + 1, chunk_id: id, title: s?.title ?? c.source_id, author: s?.author ?? null, page: web ? null : c.page, path: c.path, excerpt: clip(c.text, 520), url: web ? s!.url!.replace('{page}', String(c.page ?? '')) : (s?.url ?? null) };
   });
   const nums = (ids: string[]) => [...new Set(ids.map(id => numberOf.get(id)!).filter(Boolean))];
   let k = 0; const out = tr.out;

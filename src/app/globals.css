@@ -55,7 +55,7 @@ details.src{border-top:1px solid var(--line);margin-top:16px;padding-top:10px}
 details.src summary{cursor:pointer;font-weight:600;color:var(--navy);min-height:36px}
 .srcitem{margin-top:10px;font-size:15px}
 .srcitem .t{font-weight:600}
-.srcitem blockquote{margin-top:6px;padding:10px 12px;background:#FAFBFF;border-inline-start:3px solid var(--tq);border-radius:8px;color:#333a66;font-size:14.5px;direction:ltr;text-align:left}
+.srcitem blockquote{margin-top:6px;padding:10px 12px;background:#FAFBFF;border-inline-start:3px solid var(--tq);border-radius:8px;color:#333a66;font-size:14.5px;text-align:start;unicode-bidi:plaintext}
 .rowbtns{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
 .disclosure{margin-top:26px;text-align:center;color:var(--muted);font-size:13.5px}
 .err{background:var(--badbg);color:var(--bad);border-radius:12px;padding:12px 14px;margin-top:14px}

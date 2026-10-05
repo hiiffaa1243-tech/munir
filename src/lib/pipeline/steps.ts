@@ -52,11 +52,19 @@ export function rrf(lists: { id: string }[][], k = 60): Map<string, number> {
   return score;
 }
 
-export async function retrieve(qEn: string, qEmb: number[]): Promise<Retrieved> {
-  const [dense, lexical] = await Promise.all([matchChunks(qEmb, 20), searchChunks(qEn, 20).catch(() => [] as Chunk[])]);
+/**
+ * The library holds English and Arabic references. The question is searched in both languages:
+ * a dense search per language plus an English keyword search, fused by rank.
+ */
+export async function retrieve(qEn: string, qEmb: number[], qArEmb?: number[] | null): Promise<Retrieved> {
+  const [denseEn, lexical, denseAr] = await Promise.all([
+    matchChunks(qEmb, 20), searchChunks(qEn, 20).catch(() => [] as Chunk[]),
+    qArEmb ? matchChunks(qArEmb, 20).catch(() => [] as Chunk[]) : Promise.resolve([] as Chunk[]),
+  ]);
+  const dense = [...denseEn, ...denseAr];
   const byId = new Map<string, Chunk>();
   for (const c of [...dense, ...lexical]) if (!byId.has(c.id)) byId.set(c.id, c);
-  const fused = rrf([dense, lexical]);
+  const fused = rrf(denseAr.length ? [denseEn, denseAr, lexical] : [denseEn, lexical]);
   const ranked = [...fused.entries()].sort((a, b) => b[1] - a[1]).slice(0, config.thresholds.topK).map(([id, s]) => ({ ...byId.get(id)!, score: s }));
   const bestSim = dense.length ? Math.max(...dense.map(d => d.similarity ?? 0)) : 0;
   return { chunks: ranked, bestSim };

@@ -191,6 +191,7 @@ function Sources() {
         {prog && <><div className="prog"><i style={{ width: `${prog.total ? Math.round(100 * prog.done / prog.total) : 0}%` }} /></div><div className="small muted">{prog.label}: {prog.done} / {prog.total}</div></>}
         {log && <div className="pre" style={{ marginTop: 8 }}>{log}</div>}
       </div>
+      <SyncCard onDone={load} />
       <div className="tablewrap" style={{ marginTop: 14 }}><table className="t">
         <thead><tr><th>المصدر</th><th>الجهة</th><th>الصفحات</th><th>المقاطع</th><th>الحالة</th><th /></tr></thead>
         <tbody>{rows.map(s => (
@@ -201,6 +202,37 @@ function Sources() {
       </table></div>
       {rows.length === 0 && <div className="card center muted">لم تُرفع مصادر بعد.</div>}
     </section>
+  );
+}
+
+/** Sync with the approved online reference. The server takes a few pages per call; this loop simply keeps asking. */
+function SyncCard({ onDone }: { onDone: () => void }) {
+  const [st, setSt] = useState<{ total: number; done: number; remaining: number } | null>(null);
+  const [running, setRunning] = useState(false); const [msg, setMsg] = useState(''); const stop = useRef(false);
+  const status = useCallback(async () => { const r = await api('/api/sync?status=1'); if (r.ok && r.d.total) setSt({ total: r.d.total, done: r.d.done, remaining: r.d.remaining }); else if (!r.ok) setMsg(r.d.error ?? 'تعذر الوصول إلى المرجع الآن.'); }, []);
+  useEffect(() => { status(); }, [status]);
+  async function start() {
+    stop.current = false; setRunning(true); setMsg('');
+    for (let fails = 0; !stop.current && fails < 5;) {
+      const r = await api('/api/sync', { method: 'POST' }).catch(() => ({ ok: false, status: 0, d: {} as any }));
+      if (r.d?.total) setSt({ total: r.d.total, done: r.d.done, remaining: r.d.remaining });
+      if (r.d?.errors?.length || !r.d?.total) { fails++; setMsg(`تعذر جلب بعض الصفحات، أعيد المحاولة (${fails}).`); await sleep(3000); }
+      if (r.d?.total && r.d.remaining === 0) { setMsg('اكتملت المزامنة. تُحدَّث بعدها تلقائياً كل يوم.'); break; }
+      await sleep(600);
+    }
+    setRunning(false); onDone();
+  }
+  return (
+    <div className="card">
+      <b>المزامنة مع المراجع المعتمدة على الشبكة</b>
+      <p className="muted small" style={{ marginTop: 4 }}>الموسوعة الفقهية بموقع الدرر السنية (كتاب الحج): يقرأ منير صفحاتها من الموقع نفسه، ويحفظ مع كل مقطع رابط صفحته، ويعيد قراءتها يومياً ليلحق بأي تصحيح. خلاصات «سؤال وجواب» المنشورة فيها تدخل ذاكرة الإجابات بنصها.</p>
+      {st && <><div className="prog"><i style={{ width: `${st.total ? Math.round(100 * st.done / st.total) : 0}%` }} /></div><div className="small muted">الصفحات المحفوظة: {st.done} من {st.total}</div></>}
+      {msg && <div className="small" style={{ marginTop: 6 }}>{msg}</div>}
+      <div className="rowbtns">
+        <button className="btn sm" onClick={start} disabled={running || (st?.remaining === 0)}>{running ? 'جارٍ الجلب…' : st?.remaining === 0 ? 'مكتملة' : 'ابدأ المزامنة'}</button>
+        {running && <button className="btn sm ghost" onClick={() => { stop.current = true; }}>إيقاف</button>}
+      </div>
+    </div>
   );
 }
 

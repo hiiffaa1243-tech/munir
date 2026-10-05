@@ -4,6 +4,7 @@ import type { Answer } from '@/lib/pipeline/types';
 import { t } from '@/lib/i18n';
 import { dirOf, speechText } from './client';
 
+const isUrl = (s: string | null | undefined) => !!s && /^https?:\/\//.test(s);
 const Refs = ({ ns }: { ns: number[] }) => <>{ns.map(n => <span key={n} className="ref">{n}</span>)}</>;
 
 /** One answer, rendered in the asker's language. The trust tier is always the first thing shown. */
@@ -37,12 +38,13 @@ export default function AnswerCard({ a, question, onSave, children }: { a: Answe
   return (
     <article className="card" dir={dirOf(L)} lang={L}>
       {question && <div className="q">{question}</div>}
-      <span className={`badge b-${a.tier}`}><i />{tr(`t_${a.tier}`)}</span>
+      <span className={`badge b-${a.tier}`}><i />{tr(a.tier === 'verified' && /^(PC|DR)-/.test(a.verified?.code ?? '') ? 't_published' : `t_${a.tier}`)}</span>
       {a.notice && <p className="notice">{a.notice}</p>}
       {a.tier === 'clarify' && a.clarify && <p className="sum">{a.clarify}</p>}
       {a.summary && <p className="sum" style={{ whiteSpace: 'pre-line' }}>{a.summary}</p>}
       {a.verified && (
-        <p className="muted small">{tr('by')}: {a.verified.author} · {a.verified.source_title}{a.verified.source_locator ? ` · ${a.verified.source_locator}` : ''}</p>
+        <p className="muted small">{tr('by')}: {a.verified.author} · {a.verified.source_title}{a.verified.source_locator && !isUrl(a.verified.source_locator) ? ` · ${a.verified.source_locator}` : ''}
+          {isUrl(a.verified.source_locator) && <> · <a href={a.verified.source_locator!} target="_blank" rel="noopener noreferrer">{tr('open_source')}</a></>}</p>
       )}
       {a.claims.length > 0 && (
         <ul className="claims">{a.claims.map((c, i) => <li key={i}>{c.text}<Refs ns={c.src} /></li>)}</ul>
@@ -63,7 +65,8 @@ export default function AnswerCard({ a, question, onSave, children }: { a: Answe
             <div className="srcitem" key={s.n}>
               <div className="t"><span className="ref">{s.n}</span> {s.title}</div>
               <div className="muted">{[s.author, s.path, s.page ? `${tr('page')} ${s.page}` : ''].filter(Boolean).join(' · ')}</div>
-              <blockquote>{s.excerpt}</blockquote>
+              <blockquote dir="auto">{s.excerpt}</blockquote>
+              {s.url && <a className="small" href={s.url} target="_blank" rel="noopener noreferrer">{tr('open_source')}</a>}
             </div>
           ))}
         </details>

@@ -14,6 +14,7 @@
     "@fontsource/readex-pro": "^5.2.0",
     "@supabase/supabase-js": "^2.117.0",
     "next": "^15.5.0",
+    "node-html-parser": "^7.1.0",
     "qrcode": "^1.5.4",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
