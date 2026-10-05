@@ -5,6 +5,7 @@ import { t } from '@/lib/i18n';
 import { embedOne, enforceCitations, findVerified, generate, retrieve, translateStrings, understand, verifyWithModel, type Gen, type VerifyItem } from './steps';
 import type { Answer, AskInput, SourceRef, StageCb, Understanding } from './types';
 
+const DEADLINE_MS = 50_000; // the platform limit is 60 s
 const clip = (s: string, n: number) => (s.length > n ? s.slice(0, n).replace(/\s+\S*$/, '') + '…' : s);
 
 function baseAnswer(u: Understanding, outLang: string): Answer {
@@ -31,13 +32,27 @@ export async function ask(input: AskInput, onStage: StageCb = () => {}): Promise
   const T: Record<string, number> = {}; const t0 = Date.now();
   const timed = async <X>(name: string, f: () => Promise<X>): Promise<X> => { const s = Date.now(); try { return await f(); } finally { T[name] = Date.now() - s; } };
 
+  const hint = input.langHint && (isLang(input.langHint) || ['tr', 'bn'].includes(input.langHint)) ? input.langHint : 'en';
+
+  // A question the system cannot even classify is recorded and referred, never dropped.
   onStage('understand');
-  const u = await timed('understand', () => understand(input.text, input.langHint));
-  const outLang = isLang(u.lang) || ['tr', 'bn'].includes(u.lang) ? u.lang : (input.langHint && isLang(input.langHint) ? input.langHint : 'en');
+  let u: Understanding;
+  try { u = await timed('understand', () => understand(input.text, input.langHint)); }
+  catch (e) {
+    u = { lang: hint, q_en: input.text, q_ar: '', in_scope: true, level: 'b', personal_case: false, nusuk: 'both', stage: 'general', injection_suspected: false };
+    const f = baseAnswer(u, hint); f.flags = { refer_reason: 'understand_failed', error: String((e as Error)?.message ?? e).slice(0, 200) }; f.notice = t(hint, 'n_referred');
+    T.total = Date.now() - t0; f.timings = T; await persist(input, u, f, [], null); return f;
+  }
+  const outLang = isLang(u.lang) || ['tr', 'bn'].includes(u.lang) ? u.lang : hint;
   const a = baseAnswer(u, outLang);
   a.flags.injection_suspected = u.injection_suspected; a.flags.beta_language = ['tr', 'bn'].includes(outLang);
-  const done = async (chunkIds: string[] = [], vaId: string | null = null) => { T.total = Date.now() - t0; a.timings = T; await persist(input, u, a, chunkIds, vaId); return a; };
+  let finished = false;
+  const done = async (chunkIds: string[] = [], vaId: string | null = null) => {
+    if (finished) return a;   // the deadline already answered for this request
+    finished = true; T.total = Date.now() - t0; a.timings = T; await persist(input, u, a, chunkIds, vaId); return a;
+  };
 
+  const main = async (): Promise<Answer> => {
   // Gate 1: scope.
   if (!u.in_scope || !u.q_en.trim()) { a.tier = 'out_of_scope'; a.notice = t(outLang, 'n_out'); return done(); }
 
@@ -136,6 +151,21 @@ export async function ask(input: AskInput, onStage: StageCb = () => {}): Promise
   a.sources = sources; a.disagreement = g.disagreement_noted; a.approx_translation = tr.approx;
   if (tr.approx) a.flags.glossary = tr.report;
   if (u.personal_case) { a.tier = 'referred'; a.notice = t(outLang, 'n_personal'); a.flags.refer_reason = 'personal_case'; }
-  else { a.tier = 'grounded'; a.notice = t(outLang, 'n_grounded'); }
+  else { a.tier = 'grounded'; a.notice = t(outLang, (a.flags.verify as any)?.independent ? 'n_grounded' : 'n_grounded_fb'); }
   return done(chunkIds);
+  };
+
+  // Fail closed: any error or a blown time budget ends in a recorded referral, not in a broken screen.
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([main(), new Promise<Answer>((_, rej) => { timer = setTimeout(() => rej(new Error('deadline')), DEADLINE_MS); })]);
+  } catch (e) {
+    if (finished) return a;
+    finished = true;
+    const f = baseAnswer(u, outLang);
+    f.flags = { ...a.flags, refer_reason: (e as Error)?.message === 'deadline' ? 'deadline' : 'internal_error', error: String((e as Error)?.message ?? e).slice(0, 200) };
+    f.notice = t(outLang, u.personal_case ? 'n_personal_bare' : 'n_referred');
+    T.total = Date.now() - t0; f.timings = T; await persist(input, u, f, [], null);
+    return f;
+  } finally { if (timer) clearTimeout(timer); }
 }

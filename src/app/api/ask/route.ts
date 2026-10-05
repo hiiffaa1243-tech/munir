@@ -32,14 +32,16 @@ export async function POST(req: Request) {
   const enc = new TextEncoder();
   const stream = new ReadableStream({
     async start(ctrl) {
-      const send = (o: unknown) => ctrl.enqueue(enc.encode(JSON.stringify(o) + '\n'));
+      // If the visitor walks away mid-answer the stream closes; the pipeline must still finish so the question is recorded and a referral still opens its ticket.
+      const send = (o: unknown) => { try { ctrl.enqueue(enc.encode(JSON.stringify(o) + '\n')); } catch { /* client gone */ } };
       try {
         const result = await ask({ text: body.text, langHint: body.lang, sessionId: body.session_id, kiosk: body.kiosk, clarified: body.clarified, notebookId }, stage => send({ stage }));
-        send({ result });
+        // Internal diagnostics stay on the server.
+        send({ result: { ...result, flags: {}, timings: {} } });
       } catch (e) {
         console.error('ask failed', e);
         send({ error: 'pipeline_error' });
-      } finally { ctrl.close(); }
+      } finally { try { ctrl.close(); } catch { /* already closed */ } }
     },
   });
   return new Response(stream, { headers: { 'content-type': 'application/x-ndjson; charset=utf-8', 'cache-control': 'no-store', 'x-accel-buffering': 'no' } });

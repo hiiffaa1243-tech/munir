@@ -7,7 +7,8 @@ export interface ChatMsg { role: 'system' | 'user'; content: string }
 export interface Usage { provider: string; model: string; ms: number; in?: number; out?: number; fallback?: boolean }
 export class ModelError extends Error { constructor(public provider: string, public status: number, msg: string) { super(msg); } }
 
-const TIMEOUT_MS = 45_000;
+// A single model call may not outlive the request: the function limit is 60 s and a question makes several calls.
+const TIMEOUT_MS = 22_000;
 
 async function post(url: string, headers: Record<string, string>, body: unknown, provider: string): Promise<any> {
   const ctl = new AbortController();
@@ -46,15 +47,25 @@ async function chatOpenAI(rc: RoleConfig, msgs: ChatMsg[], json: boolean, maxTok
   }
 }
 
-async function chatGoogle(rc: RoleConfig, msgs: ChatMsg[], json: boolean, maxTokens: number) {
+const noThinkCfg = new Set<string>();
+async function chatGoogle(rc: RoleConfig, msgs: ChatMsg[], json: boolean, maxTokens: number): Promise<{ text: string; in?: number; out?: number }> {
   const sys = msgs.filter(m => m.role === 'system').map(m => m.content).join('\n\n');
   const user = msgs.filter(m => m.role === 'user').map(m => m.content).join('\n\n');
+  // Gemini 3 reasons before answering: it keeps its default temperature and is asked for light reasoning,
+  // with headroom in the output budget so the JSON is never cut short.
+  const g3 = /^gemini-3/.test(rc.model); const think = g3 && !noThinkCfg.has(rc.model);
   const body: any = {
     contents: [{ role: 'user', parts: [{ text: user }] }],
-    generationConfig: { temperature: 0, maxOutputTokens: maxTokens + 6000, ...(json ? { responseMimeType: 'application/json' } : {}) },
+    generationConfig: { ...(g3 ? {} : { temperature: 0 }), maxOutputTokens: maxTokens + 6000, ...(json ? { responseMimeType: 'application/json' } : {}), ...(think ? { thinkingConfig: { thinkingLevel: 'low' } } : {}) },
   };
   if (sys) body.systemInstruction = { parts: [{ text: sys }] };
-  const d = await post(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(rc.model)}:generateContent`, { 'x-goog-api-key': config.keys.google }, body, 'google');
+  let d: any;
+  try {
+    d = await post(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(rc.model)}:generateContent`, { 'x-goog-api-key': config.keys.google }, body, 'google');
+  } catch (e) {
+    if (think && e instanceof ModelError && e.status === 400 && /thinking/i.test(e.message)) { noThinkCfg.add(rc.model); return chatGoogle(rc, msgs, json, maxTokens); }
+    throw e;
+  }
   const text = (d.candidates?.[0]?.content?.parts ?? []).map((p: any) => p.text ?? '').join('');
   return { text, in: d.usageMetadata?.promptTokenCount, out: d.usageMetadata?.candidatesTokenCount };
 }
@@ -89,7 +100,7 @@ async function callRole(role: Role, rcBase: RoleConfig, msgs: ChatMsg[], json: b
   let lastErr: unknown;
   for (const model of models) {
     const rc = { provider: rcBase.provider, model };
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (let attempt = 0; attempt < 2; attempt++) {
       try {
         const r = await call(rc, msgs, json, maxTokens);
         const data = parse ? extractJson(r.text) : null;
@@ -97,9 +108,10 @@ async function callRole(role: Role, rcBase: RoleConfig, msgs: ChatMsg[], json: b
         return { r, data, rc };
       } catch (e) {
         lastErr = e;
-        if (isModelMissing(e)) break;                 // try the next candidate
+        if (isModelMissing(e)) { chosen.delete(key); break; }   // try the next candidate
         if (e instanceof ModelError && !isTransient(e)) throw e;
-        if (attempt < 2) await sleep(attempt ? 2000 : 700);
+        if ((e as Error)?.name === 'AbortError') throw new ModelError(rc.provider, 504, `${rc.provider} timed out`); // no second wait on a timeout
+        if (attempt < 1) await sleep(800);
       }
     }
     if (!isModelMissing(lastErr)) break;
@@ -141,7 +153,9 @@ export async function chatText(role: Role, msgs: ChatMsg[], maxTokens = 700): Pr
 /** Embeddings (OpenAI). Deterministic pseudo-vectors in mock mode. */
 export async function embed(texts: string[]): Promise<number[][]> {
   if (config.mock) return texts.map(t => { const v = new Array(config.embedDim).fill(0); for (let i = 0; i < t.length; i++) v[t.charCodeAt(i) % config.embedDim] += 1; const n = Math.hypot(...v) || 1; return v.map(x => x / n); });
-  const d = await post('https://api.openai.com/v1/embeddings', { authorization: `Bearer ${config.keys.openai}` }, { model: config.embedModel, input: texts }, 'openai');
+  const go = () => post('https://api.openai.com/v1/embeddings', { authorization: `Bearer ${config.keys.openai}` }, { model: config.embedModel, input: texts }, 'openai');
+  let d: any;
+  try { d = await go(); } catch (e) { if (e instanceof ModelError && !isTransient(e)) throw e; await sleep(600); d = await go(); }
   return (d.data as any[]).sort((a, b) => a.index - b.index).map(x => x.embedding as number[]);
 }
 
@@ -152,7 +166,7 @@ export async function transcribe(audio: Blob, filename: string): Promise<{ text:
   fd.append('file', audio, filename);
   fd.append('model', config.sttModel);
   if (config.sttModel === 'whisper-1') fd.append('response_format', 'verbose_json');
-  const r = await fetch('https://api.openai.com/v1/audio/transcriptions', { method: 'POST', headers: { authorization: `Bearer ${config.keys.openai}` }, body: fd });
+  const r = await fetch('https://api.openai.com/v1/audio/transcriptions', { method: 'POST', headers: { authorization: `Bearer ${config.keys.openai}` }, body: fd, signal: AbortSignal.timeout(30_000) });
   const text = await r.text();
   if (!r.ok) throw new ModelError('openai', r.status, `stt ${r.status}: ${text.slice(0, 300)}`);
   const d = JSON.parse(text);
@@ -164,7 +178,7 @@ export async function speak(text: string, lang: string): Promise<ArrayBuffer> {
   if (config.mock) return new ArrayBuffer(0);
   const body: any = { model: config.ttsModel, voice: config.ttsVoice, input: text.slice(0, 3500), response_format: 'mp3' };
   if (config.ttsModel.startsWith('gpt-4o')) body.instructions = `Speak clearly and calmly in ${lang}. Pronounce Islamic terms carefully.`;
-  const r = await fetch('https://api.openai.com/v1/audio/speech', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${config.keys.openai}` }, body: JSON.stringify(body) });
+  const r = await fetch('https://api.openai.com/v1/audio/speech', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${config.keys.openai}` }, body: JSON.stringify(body), signal: AbortSignal.timeout(40_000) });
   if (!r.ok) throw new ModelError('openai', r.status, `tts ${r.status}: ${(await r.text()).slice(0, 300)}`);
   return r.arrayBuffer();
 }

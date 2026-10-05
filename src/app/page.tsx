@@ -8,7 +8,7 @@ import { useAsker } from '@/components/useAsker';
 import { applyDocLang, randomId, saveLang, savedLang } from '@/components/client';
 
 const LANGS = Object.keys(UI) as UiLang[];
-const IDLE_MS = 90_000;
+const IDLE_MS = 60_000;
 
 interface Claim { url: string; code: string; short_url: string; qr: string }
 
@@ -62,6 +62,11 @@ export default function ServicePoint() {
       const qr = await QRCode.toDataURL(c.url, { margin: 1, width: 480, color: { dark: '#12183F', light: '#FFFFFF' } });
       setClaim({ ...c, qr });
     } catch { asker.fail('error'); } finally { setSaving(false); }
+  }
+  // Once a visitor has taken their answers to their phone, the session is theirs alone: the next question starts a new one.
+  function closeClaim() {
+    setClaim(null);
+    if (kiosk) newVisitor(); else setSessionId(randomId(18));
   }
   const sendClarification = () => { if (clar.trim().length < 1) return; asker.run(`${asker.question}\n${clar.trim()}`, { clarified: true, lang: asker.answer?.lang }); setClar(''); };
 
@@ -117,7 +122,7 @@ export default function ServicePoint() {
       </div>
 
       {claim && (
-        <div className="modal" role="dialog" aria-modal="true" onClick={() => setClaim(null)}>
+        <div className="modal" role="dialog" aria-modal="true" onClick={closeClaim}>
           <div className="box" onClick={e => e.stopPropagation()}>
             <h2 style={{ fontSize: 22 }}>{t(lang, 'save_h')}</h2>
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -126,7 +131,7 @@ export default function ServicePoint() {
             <p dir="ltr" style={{ fontWeight: 600 }}>{claim.short_url}</p>
             <p className="code">{claim.code}</p>
             <p className="muted small">{t(lang, 'save_note')}</p>
-            <div className="rowbtns" style={{ justifyContent: 'center' }}><button className="btn sm ghost" onClick={() => setClaim(null)}>✕</button></div>
+            <div className="rowbtns" style={{ justifyContent: 'center' }}><button className="btn sm ghost" onClick={closeClaim}>✕</button></div>
           </div>
         </div>
       )}

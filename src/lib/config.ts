@@ -53,3 +53,6 @@ export const LANG_NAMES: Record<string, string> = {
   ar: 'Arabic', en: 'English', ur: 'Urdu', id: 'Indonesian', fr: 'French', tr: 'Turkish', bn: 'Bengali',
 };
 export const RTL_LANGS = new Set(['ar', 'ur']);
+
+/** A real deployment must set its own long APP_SECRET; the development default signs nothing that matters. */
+export const secretIsStrong = () => config.mock || (config.appSecret !== 'dev-only-secret-change-me' && config.appSecret.length >= 24);

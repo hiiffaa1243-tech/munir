@@ -5,6 +5,16 @@ import { embedOne, toEnglish, translateStrings, understand, verify } from '@/lib
 import { hasArabic } from '@/lib/arabic';
 
 export const runtime = 'nodejs';
+
+/** Language of the specialist's own text (not of the question it answers). */
+function detectAnswerLang(text: string, english: string): string {
+  if (/[ٹڈڑںےہھگپچ]/.test(text)) return 'ur';
+  if (hasArabic(text)) return 'ar';
+  if (text.trim() === english.trim()) return 'en';
+  if (/\b(yang|dan|tidak|adalah|dengan|untuk)\b/i.test(text)) return 'id';
+  if (/\b(les|des|est|une|pour|dans)\b/i.test(text)) return 'fr';
+  return 'en';
+}
 export const maxDuration = 60;
 
 const Body = z.object({
@@ -35,7 +45,7 @@ export async function POST(req: Request) {
       return json({ published: false, verdict: check.verdict, reason: check.reason }, 200);
     }
     const emb = await embedOne(u.q_en || b.question);
-    const answerLang = hasArabic(b.answer) ? 'ar' : (u.lang || 'en');
+    const answerLang = detectAnswerLang(b.answer, answerEn);
     const db = sb();
     const ins = await db.from('verified_answers').insert({
       q_canon: u.q_en || b.question, q_ar: u.q_ar, q_embedding: vec(emb), answer: b.answer, answer_lang: answerLang, answer_en: answerEn,

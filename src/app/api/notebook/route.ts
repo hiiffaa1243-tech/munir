@@ -2,6 +2,7 @@ import { bad, clientIp, json, rateLimit } from '@/lib/http';
 import { hashKey, validKey } from '@/lib/notebook/tokens';
 import { sb } from '@/lib/db';
 import { translateStrings } from '@/lib/pipeline/steps';
+import { t } from '@/lib/i18n';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -17,11 +18,11 @@ export async function GET(req: Request) {
   const id = (nb as any).id;
   db.from('notebooks').update({ last_seen: new Date().toISOString() }).eq('id', id).then(() => {}, () => {});
   const [{ data: inter }, { data: tickets }] = await Promise.all([
-    db.from('interactions').select('id,created_at,lang,q_text,tier,answer').eq('notebook_id', id).eq('is_eval', false).order('created_at', { ascending: false }).limit(100),
+    db.from('interactions').select('id,created_at,lang,q_text,tier,answer,va_id').eq('notebook_id', id).eq('is_eval', false).order('created_at', { ascending: false }).limit(100),
     db.from('tickets').select('id,interaction_id,status,lang,va_id,resolved_at').eq('notebook_id', id).limit(100),
   ]);
   const tks = (tickets ?? []) as any[];
-  const vaIds = [...new Set(tks.filter(t => t.status === 'resolved' && t.va_id).map(t => t.va_id))];
+  const vaIds = [...new Set([...tks.filter(t => t.status === 'resolved' && t.va_id).map(t => t.va_id), ...((inter ?? []) as any[]).filter(i => i.va_id).map(i => i.va_id)])];
   const vas: Record<string, any> = {};
   if (vaIds.length) {
     const { data } = await db.from('verified_answers').select('id,code,answer,answer_lang,answer_en,translations,source_title,source_locator,source_quote,author_name,status').in('id', vaIds);
@@ -40,7 +41,10 @@ export async function GET(req: Request) {
       }
       resolution = { text, author: v.author_name, source_title: v.source_title, source_locator: v.source_locator, source_quote: v.source_quote, resolved_at: tk.resolved_at };
     }
-    items.push({ id: it.id, created_at: it.created_at, lang: it.lang, question: it.q_text, tier: it.tier, answer: it.answer, ticket: tk ? { id: tk.id, status: tk.status } : null, resolution });
+    let answer = { ...(it.answer ?? {}), flags: {}, timings: {} };
+    // An answer the specialist has since withdrawn disappears from every notebook that holds it.
+    if (it.tier === 'verified' && it.va_id && vas[it.va_id]?.status === 'withdrawn') answer = { ...answer, tier: 'referred', summary: '', verified: undefined, notice: t(it.lang, 'n_withdrawn') };
+    items.push({ id: it.id, created_at: it.created_at, lang: it.lang, question: it.q_text, tier: answer.tier ?? it.tier, answer, ticket: tk ? { id: tk.id, status: tk.status } : null, resolution });
   }
   return json({ items, exists: true });
 }

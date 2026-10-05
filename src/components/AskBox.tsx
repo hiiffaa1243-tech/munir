@@ -18,6 +18,7 @@ export default function AskBox({ lang, value, onChange, onAsk, onAudio, onError,
 
   const stop = () => { if (timer.current) clearTimeout(timer.current); try { mr.current?.stop(); } catch { /* already stopped */ } setRec(false); };
   async function start() {
+    if (typeof MediaRecorder === 'undefined' || !navigator.mediaDevices?.getUserMedia) { onError('mic_denied'); return; }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'].find(m => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(m));

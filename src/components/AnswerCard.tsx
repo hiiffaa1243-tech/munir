@@ -17,13 +17,15 @@ export default function AnswerCard({ a, question, onSave, children }: { a: Answe
   async function listen() {
     if (playing) { audio.current?.pause(); setPlaying(false); return; }
     setLoadingAudio(true);
+    // The element is created and primed inside the tap itself; phones refuse playback that starts after a network wait.
+    const el = new Audio(); audio.current = el;
+    el.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA='; el.play().catch(() => {});
     try {
       const r = await fetch('/api/tts', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: speechText(a), lang: L }) });
       if (!r.ok) throw new Error('tts');
       const url = URL.createObjectURL(await r.blob());
-      const el = new Audio(url); audio.current = el;
       el.onended = () => { setPlaying(false); URL.revokeObjectURL(url); };
-      await el.play(); setPlaying(true);
+      el.src = url; await el.play(); setPlaying(true);
     } catch { /* speech is an enhancement; the text stays on screen */ } finally { setLoadingAudio(false); }
   }
   async function report() {

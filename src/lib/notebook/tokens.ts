@@ -1,6 +1,6 @@
 // Anonymous, capability-based notebook: one-time claim tokens, short codes, and hashed notebook keys.
 import { createHmac, createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import { config } from '@/lib/config';
+import { config, secretIsStrong } from '@/lib/config';
 
 const b64u = (b: Buffer) => b.toString('base64url');
 const sign = (data: string) => b64u(createHmac('sha256', config.appSecret).update(data).digest());
@@ -42,12 +42,12 @@ export const validKey = (key: unknown): key is string => typeof key === 'string'
 // Specialist session cookie (single shared passcode in this version).
 export function makeSpecialistCookie(ttlMs = 12 * 3600_000, now = Date.now()): string { const exp = String(now + ttlMs); return `${exp}.${sign('sp:' + exp)}`; }
 export function checkSpecialistCookie(v: string | undefined, now = Date.now()): boolean {
-  if (!v) return false; const [exp, sig] = v.split('.'); if (!exp || !sig) return false;
+  if (!v || !secretIsStrong()) return false; const [exp, sig] = v.split('.'); if (!exp || !sig) return false;
   const expect = sign('sp:' + exp); const a = Buffer.from(sig); const b = Buffer.from(expect);
   return a.length === b.length && timingSafeEqual(a, b) && Number(exp) > now;
 }
 export function passcodeMatches(given: string): boolean {
-  const want = config.specialistPasscode; if (!want) return false;
+  const want = config.specialistPasscode; if (!want || !secretIsStrong()) return false;
   const a = createHash('sha256').update(given).digest(); const b = createHash('sha256').update(want).digest();
   return timingSafeEqual(a, b);
 }

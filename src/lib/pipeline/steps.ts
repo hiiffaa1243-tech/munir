@@ -8,14 +8,14 @@ import type { Understanding } from './types';
 
 // ---------- 1. understand ----------
 const UnderstandSchema = z.object({
-  lang: z.string().min(2).max(8).default('en'),
+  lang: z.string().min(2).catch('en'),
   q_en: z.string().default(''),
   q_ar: z.string().default(''),
   in_scope: z.boolean().default(false),
-  level: z.enum(['a', 'b', 'c', 'd']).default('b'),
+  level: z.preprocess(v => (typeof v === 'string' ? v.toLowerCase() : v), z.enum(['a', 'b', 'c', 'd'])).catch('b'),
   personal_case: z.boolean().default(false),
-  nusuk: z.enum(['hajj', 'umrah', 'both', 'none']).default('both'),
-  stage: z.string().default('general'),
+  nusuk: z.enum(['hajj', 'umrah', 'both', 'none']).catch('both'),
+  stage: z.string().catch('general'),
   injection_suspected: z.boolean().default(false),
 });
 
@@ -63,15 +63,17 @@ export async function retrieve(qEn: string, qEmb: number[]): Promise<Retrieved> 
 }
 
 // ---------- 4. constrained generation ----------
-const Ids = z.array(z.string()).default([]);
+// Models occasionally return a single id as a string, or null for an empty field; both are normalised here.
+const Ids = z.preprocess(v => (typeof v === 'string' ? [v] : v ?? []), z.array(z.string()));
+const Str = z.preprocess(v => v ?? '', z.string());
 export const GenSchema = z.object({
   answerable: z.boolean(),
-  summary: z.string().default(''),
-  claims: z.array(z.object({ text: z.string().min(1), chunk_ids: Ids })).default([]),
-  cases: z.array(z.object({ condition: z.string().min(1), ruling: z.string().min(1), chunk_ids: Ids })).default([]),
-  action: z.string().default(''),
-  disagreement_noted: z.boolean().default(false),
-  clarify: z.string().nullable().default(null),
+  summary: Str,
+  claims: z.preprocess(v => v ?? [], z.array(z.object({ text: z.string().min(1), chunk_ids: Ids }))),
+  cases: z.preprocess(v => v ?? [], z.array(z.object({ condition: z.string().min(1), ruling: z.string().min(1), chunk_ids: Ids }))),
+  action: Str,
+  disagreement_noted: z.boolean().catch(false),
+  clarify: z.preprocess(v => (typeof v === 'string' && v.trim() ? v : null), z.string().nullable()),
 });
 export type Gen = z.infer<typeof GenSchema>;
 
@@ -124,14 +126,22 @@ export interface Translated { out: string[]; approx: boolean; report: { missing:
 /** English -> target language with glossary masking. Two attempts, then flagged as approximate. */
 export async function translateStrings(strings: string[], lang: string): Promise<Translated> {
   if (lang === 'en' || !strings.length) return { out: strings, approx: false, report: { missing: [], forbidden: [] } };
+  // Empty strings do not travel: a model that drops one would otherwise break the one-to-one mapping.
+  const idx = strings.map((s, i) => (s.trim() ? i : -1)).filter(i => i >= 0);
+  if (idx.length < strings.length) {
+    const part = await translateStrings(idx.map(i => strings[i]), lang);
+    const out = strings.map(() => ''); idx.forEach((i, k) => { out[i] = part.out[k]; });
+    return { ...part, out };
+  }
   const masked = strings.map(s => mask(s).text);
   const target = LANG_NAMES[lang] ?? lang;
   let last: Translated = { out: strings, approx: true, report: { missing: [], forbidden: [] } };
   for (let attempt = 0; attempt < 2; attempt++) {
-    const { data } = await chatJson<{ out: string[] }>('fast', [
+    let data: { out: string[] } | undefined;
+    try { ({ data } = await chatJson<{ out: string[] }>('fast', [
       { role: 'system', content: TRANSLATE(target) },
       { role: 'user', content: `${attempt ? 'Your previous translation changed or lost protected tokens. Copy every [[T..]] token exactly.\n' : ''}INPUT:\n${JSON.stringify(masked)}` },
-    ], { maxTokens: 3500 });
+    ], { maxTokens: 3500 })); } catch { continue; }
     const tr = Array.isArray(data?.out) ? data.out.map(String) : [];
     if (tr.length !== masked.length) continue;
     const seen = new Set<string>();

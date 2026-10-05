@@ -60,16 +60,15 @@ export default function Notebook() {
     headers: (): Record<string, string> => { const k = notebookKey(true); return k ? { 'x-notebook-key': k } : {}; },
     onAnswer: () => { setText(''); load(); },
   });
-  async function ask(q: string) {
+  async function ensure() {
     const key = notebookKey(true);
-    if (key && !ensured.current) { try { await fetch('/api/notebook', { method: 'POST', headers: { 'x-notebook-key': key } }); ensured.current = true; } catch { /* asked without saving */ } }
-    asker.run(q);
+    if (!key || ensured.current) return;
+    try { const r = await fetch('/api/notebook', { method: 'POST', headers: { 'x-notebook-key': key } }); if (r.ok) ensured.current = true; } catch { /* the question is still answered, just not saved */ }
   }
-  async function askAudio(b: Blob) {
-    const key = notebookKey(true);
-    if (key && !ensured.current) { try { await fetch('/api/notebook', { method: 'POST', headers: { 'x-notebook-key': key } }); ensured.current = true; } catch { /* continue */ } }
-    asker.runAudio(b);
-  }
+  async function ask(q: string, extra?: { clarified?: boolean; lang?: string }) { await ensure(); asker.run(q, extra); }
+  async function askAudio(b: Blob) { await ensure(); asker.runAudio(b); }
+  const [clar, setClar] = useState('');
+  const sendClarification = () => { if (!clar.trim()) return; ask(`${asker.question}\n${clar.trim()}`, { clarified: true, lang: asker.answer?.lang }); setClar(''); };
   async function redeem() {
     const key = notebookKey(true); if (!key) return;
     setCodeMsg(null);
@@ -97,9 +96,21 @@ export default function Notebook() {
       </section>
 
       {pending > 0 && <p className="notice">{t(lang, 'nb_pending')}: {pending}</p>}
-      {items.length === 0 && !asker.busy && <div className="card center muted">{t(lang, 'nb_empty')}</div>}
+      {items.length === 0 && !asker.busy && !asker.answer && <div className="card center muted">{t(lang, 'nb_empty')}</div>}
 
-      {items.map(it => (
+      {/* The answer just received is shown at once, whether or not the saved list has caught up. */}
+      {asker.answer && !items.some(i => i.id === asker.answer?.interaction_id) && (
+        <AnswerCard a={asker.answer} question={asker.question}>
+          {asker.answer.tier === 'clarify' && (
+            <div className="rowbtns">
+              <input className="in" style={{ flex: 1, minWidth: 160 }} value={clar} onChange={e => setClar(e.target.value)} placeholder={t(asker.answer.lang, 'clarify_ph')} dir="auto" onKeyDown={e => { if (e.key === 'Enter') sendClarification(); }} />
+              <button className="btn sm" onClick={sendClarification}>{t(asker.answer.lang, 'send')}</button>
+            </div>
+          )}
+        </AnswerCard>
+      )}
+
+      {items.filter(it => it.tier !== 'clarify').map(it => (
         <AnswerCard key={it.id} a={{ ...it.answer, interaction_id: it.id }} question={it.question}>
           {it.resolution ? (
             <div className="resolved" dir={dirOf(it.lang)}>
