@@ -18,11 +18,23 @@ Eleven English-language publications, read as text PDFs. They are official relea
 | ten_days | Merit of the First Ten Days of Dhul-Hijjah | The Scientific Committee | Presidency of Religious Affairs | 13 | 7 |
 | fasting | Some Rulings on Fasting | The Scientific Committee | Presidency of Religious Affairs | 20 | 12 |
 
-**Verified-answer memory.** 132 published fatwas of the Permanent Committee for Scholarly Research and Ifta, taken verbatim from the first book above with their printed references (collection, volume and page). They are stored as written; only the question is normalised for matching.
+### Online reference
 
-**Not used.** A scanned guide without a text layer, a booklet outside the Hajj and Umrah scope, and duplicate files were excluded. Several large illustrated PDFs supplied by the team were not processed in this version.
+| Id | Title | Body | Pages | Chunks |
+|---|---|---|---|---|
+| dorar_feqhia | الموسوعة الفقهية: كتاب الحج (the Fiqh Encyclopedia, Book of Hajj), dorar.net/feqhia | مؤسسة الدرر السنية (al-Durar al-Saniyyah), supervised by Shaykh Alawi al-Saqqaf | 113 web pages | 544 |
 
-**Terminology.** The glossary (`src/lib/glossary/data.ts`) is a first version written by the team for the five launch languages. Every entry carries `reviewed: false`. The challenge annex prefers the Jamhara dictionary (islamic-content.com/dictionary) over machine translation; aligning the entries with it is planned and has not been done.
+dorar.net/feqhia is named among the challenge's approved references. All rights are reserved by the foundation. The site's robots.txt allows crawling, but it currently answers requests from servers with 403, so the 113 pages of the Book of Hajj were read once through an ordinary browser session, at a slow pace, and imported as a pack by the specialist. Footnotes were left out; each passage keeps the address of its page, and every answer that uses it links back to the original. The text is not in this repository. The scheduled sync (`/api/sync`, daily) is implemented and will take over once the foundation grants access or an API.
+
+**Verified-answer memory (738 published answers, stored verbatim).**
+- 132 fatwas of the Permanent Committee for Scholarly Research and Ifta, from the fatwas book above, with their printed references (collection, volume and page).
+- 606 question-and-answer summaries published on the pages of the Fiqh Encyclopedia, each stored with the address of its page.
+
+Only the question is normalised for matching; the answer text is never rewritten.
+
+**Not used.** Two scanned booklets whose OCR dropped words (a missing word can reverse a ruling), a general motivational guide that is not a reference of rulings, one duplicate edition and one off-topic booklet.
+
+**Terminology.** The glossary (`src/lib/glossary/data.ts`, version v2) was checked against the approved dictionary of Sharia terms (Jamhara, islamic-content.com/dictionary), which the challenge annex prefers over machine translation. 47 of 59 entries were found there and carry the id of the entry consulted. The dictionary renders most Hajj terms in English only; 16 entries were confirmed or corrected in Urdu, Indonesian or French and are marked `reviewed: true`. The others remain the team's renderings and are marked as not reviewed. One deliberate difference is documented in the file: the dictionary's entry for "dam" is the general word (blood), while in Hajj it means a compensatory sacrifice.
 
 ## Models and services
 
@@ -47,6 +59,7 @@ No model was trained or fine-tuned. No user data is sent anywhere except the que
 | @fontsource/readex-pro (Readex Pro typeface) | 5 | OFL-1.1 |
 | typescript | 5 | Apache-2.0 |
 | vitest | 3 | MIT |
+| node-html-parser | 7 | MIT |
 | PyMuPDF (extraction script only, not deployed) | 1.x | AGPL-3.0 |
 
 PyMuPDF is used offline to prepare the source pack and is not part of the deployed application.
