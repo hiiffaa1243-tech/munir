@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { config, LANG_NAMES } from '@/lib/config';
 import { chatJson, embed } from '@/lib/models';
-import { matchChunks, searchChunks, matchVerified as dbMatchVerified, type Chunk, type VerifiedAnswer } from '@/lib/db';
+import { matchChunks, searchChunks, matchVerified as dbMatchVerified, sb, type Chunk, type VerifiedAnswer } from '@/lib/db';
 import { mask, unmask, checkIntegrity, legend, tidy } from '@/lib/glossary/mask';
 import { EQUIVALENCE, GENERATE, TRANSLATE, UNDERSTAND, VERIFY } from './prompts';
 import type { Understanding } from './types';
@@ -11,6 +11,7 @@ const UnderstandSchema = z.object({
   lang: z.string().min(2).catch('en'),
   q_en: z.string().default(''),
   q_ar: z.string().default(''),
+  issue_en: z.preprocess(v => v ?? '', z.string()),
   in_scope: z.boolean().default(false),
   level: z.preprocess(v => (typeof v === 'string' ? v.toLowerCase() : v), z.enum(['a', 'b', 'c', 'd'])).catch('b'),
   personal_case: z.boolean().default(false),
@@ -53,20 +54,40 @@ export function rrf(lists: { id: string }[][], k = 60): Map<string, number> {
   return score;
 }
 
+/** The chunk before or after another in the same source: ids end in a running number. */
+const neighbour = (id: string, d: number): string | null => {
+  const m = id.match(/^(.*_)(\d+)$/); if (!m) return null;
+  const n = Number(m[2]) + d; if (n < 0) return null;
+  return m[1] + String(n).padStart(m[2].length, '0');
+};
+
 /**
- * The library holds English and Arabic references. The question is searched in both languages:
- * a dense search per language plus an English keyword search, fused by rank.
+ * The library holds English and Arabic references. The question is searched as asked (in English and in Arabic)
+ * and as the legal issue a book would file it under, plus an English keyword search; the lists are fused by rank.
+ * The passages that follow and precede the best matches are added, so a ruling is read together with what the
+ * book says right before and after it.
  */
-export async function retrieve(qEn: string, qEmb: number[], qArEmb?: number[] | null): Promise<Retrieved> {
-  const [denseEn, lexical, denseAr] = await Promise.all([
-    matchChunks(qEmb, 20), searchChunks(qEn, 20).catch(() => [] as Chunk[]),
-    qArEmb ? matchChunks(qArEmb, 20).catch(() => [] as Chunk[]) : Promise.resolve([] as Chunk[]),
+export async function retrieve(qEn: string, qEmb: number[], qArEmb?: number[] | null, issue?: { text: string; emb: number[] | null }): Promise<Retrieved> {
+  const none = Promise.resolve([] as Chunk[]);
+  const [denseEn, lexical, denseAr, denseIssue] = await Promise.all([
+    matchChunks(qEmb, 20), searchChunks(`${qEn} ${issue?.text ?? ''}`.trim(), 20).catch(() => [] as Chunk[]),
+    qArEmb ? matchChunks(qArEmb, 20).catch(() => [] as Chunk[]) : none,
+    issue?.emb ? matchChunks(issue.emb, 20).catch(() => [] as Chunk[]) : none,
   ]);
-  const dense = [...denseEn, ...denseAr];
+  const dense = [...denseEn, ...denseAr, ...denseIssue];
   const byId = new Map<string, Chunk>();
   for (const c of [...dense, ...lexical]) if (!byId.has(c.id)) byId.set(c.id, c);
-  const fused = rrf(denseAr.length ? [denseEn, denseAr, lexical] : [denseEn, lexical]);
+  const fused = rrf([denseEn, denseIssue, denseAr, lexical].filter(l => l.length));
   const ranked = [...fused.entries()].sort((a, b) => b[1] - a[1]).slice(0, config.thresholds.topK).map(([id, s]) => ({ ...byId.get(id)!, score: s }));
+  const have = new Set(ranked.map(c => c.id));
+  const want = ranked.slice(0, 3).flatMap(c => [neighbour(c.id, 1), neighbour(c.id, -1)]).filter((x): x is string => !!x && !have.has(x)).slice(0, 4);
+  if (want.length) {
+    try {
+      const { data } = await sb().from('chunks').select('id,source_id,path,page,text').in('id', want);
+      const active = new Set(ranked.map(c => c.source_id));   // only sources already known to be active
+      for (const c of (data ?? []) as Chunk[]) if (active.has(c.source_id)) ranked.push({ ...c, score: 0 });
+    } catch { /* neighbours are a bonus */ }
+  }
   const bestSim = dense.length ? Math.max(...dense.map(d => d.similarity ?? 0)) : 0;
   return { chunks: ranked, bestSim };
 }
@@ -120,7 +141,7 @@ export async function verifyWithModel(items: VerifyItem[]): Promise<{ results: V
   if (!items.length) return { results: [], model: '', fallback: false };
   const { data, usage } = await chatJson<{ results: VerifyResult[] }>('verify', [
     { role: 'system', content: VERIFY },
-    { role: 'user', content: `STATEMENTS:\n${JSON.stringify(items.map(i => ({ id: i.id, statement: i.statement, passages: i.passages })), null, 1)}` },
+    { role: 'user', content: `PASSAGES:\n${[...new Set(items.flatMap(i => i.passages))].map((p, k) => `(${k + 1}) ${p}`).join('\n\n')}\n\nSTATEMENTS:\n${JSON.stringify(items.map(i => ({ id: i.id, statement: i.statement })), null, 1)}` },
   ], { maxTokens: 1200 });
   const got = new Map((data?.results ?? []).map(r => [Number(r.id), r]));
   // A statement the checker did not return a verdict for is treated as unverified (fail-closed).

@@ -1,5 +1,5 @@
 // Prompt templates, versioned. The user's question is always passed as data, never as instructions.
-export const PROMPT_VERSION = 'p4';
+export const PROMPT_VERSION = 'p5';
 
 export const UNDERSTAND = `TASK:UNDERSTAND
 You classify and normalise one question asked by a pilgrim at a self-service point for Hajj and Umrah guidance.
@@ -10,6 +10,7 @@ Return one JSON object:
  "lang": ISO 639-1 code of the question's language,
  "q_en": the question rewritten as one clear, self-contained English question using standard fiqh terms (Ihram, Tawaf, Sa'i, Miqat, Fidyah...). Keep every fact and condition the asker stated. Do not answer it.
  "q_ar": the same question in clear Modern Standard Arabic,
+ "issue_en": the legal issue in four to ten words, worded as the heading a fiqh book would give it (for example "Doubt about the number of tawaf rounds", "Passing the miqat without ihram", "Types of Hajj: ifrad, qiran, tamattu"). Empty string if out of scope,
  "in_scope": true if it concerns Hajj, Umrah, visiting the two Holy Mosques, their rites, rulings, supplications or closely related worship during the journey; also true for basic questions about Islam asked by a visitor (for example why Muslims face the Kaaba). false for logistics (hotels, visas, prices, directions), politics, poems, unrelated fiqh (zakat on gold, contracts), or judging persons or groups,
  "level": "a" settled facts | "b" explanation and reasoning | "c" disputed or highly sensitive matter | "d" personal fatwa or individual case,
  "personal_case": true ONLY when a correct answer depends on facts of a specific person's complex situation that a general ruling cannot settle: medical conditions or medication, family disputes (divorce, guardianship, a spouse's refusal), validity of a specific contract or of a specific person's worship, death during the rites, legal or permit matters, or a request for your personal opinion or preference. An ordinary practical question such as "I did X while in ihram, what must I do?" is NOT a personal case: it is level "b" and is answered by a general ruling with cases,
@@ -46,8 +47,8 @@ Return one JSON object:
 {"answerable": boolean, "summary": string, "claims": [{"text": string, "chunk_ids": [string]}], "cases": [{"condition": string, "ruling": string, "chunk_ids": [string]}], "action": string (what the asker should do now, or ""), "disagreement_noted": boolean, "clarify": string or null}`;
 
 export const VERIFY = `TASK:VERIFY
-You are an independent checker. For each statement you receive the passages it cites.
-Decide whether the passages SUPPORT the statement.
+You are an independent checker. You receive PASSAGES from approved sources and a list of STATEMENTS drafted from them.
+For each statement decide whether the passages SUPPORT it. Read all the passages before judging: support may be in any of them.
 - "supported": the passages state it or directly entail it.
 - "contradicted": the passages say otherwise.
 - "insufficient": the passages do not establish it, or it adds a ruling, number, condition, verse or hadith that the passages do not contain.

@@ -4,7 +4,7 @@ export type Tier = 'verified' | 'grounded' | 'clarify' | 'referred' | 'out_of_sc
 export type Level = 'a' | 'b' | 'c' | 'd';
 
 export interface Understanding {
-  lang: string; q_en: string; q_ar: string; in_scope: boolean; level: Level; personal_case: boolean;
+  lang: string; q_en: string; q_ar: string; issue_en?: string; in_scope: boolean; level: Level; personal_case: boolean;
   nusuk: 'hajj' | 'umrah' | 'both' | 'none'; stage: string; injection_suspected: boolean;
 }
 

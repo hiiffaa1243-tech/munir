@@ -44,7 +44,7 @@ export const config = {
     // Initial values. They are calibrated on the 30-question dev split only.
     vaSimMin: num('VA_SIM_MIN', 0.55),       // verified-answer candidate cosine floor
     retrieveSimMin: num('RETRIEVE_SIM_MIN', 0.28), // answerability gate on best chunk cosine
-    topK: num('RETRIEVE_TOP_K', 6),
+    topK: num('RETRIEVE_TOP_K', 8),
   },
   limits: { maxQuestionChars: 500, maxAudioBytes: 2_500_000, askPerMinute: 20 },
 };

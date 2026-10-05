@@ -59,7 +59,12 @@ export async function ask(input: AskInput, onStage: StageCb = () => {}): Promise
   if (!u.in_scope || !u.q_en.trim()) { a.tier = 'out_of_scope'; a.notice = t(outLang, 'n_out'); return done(); }
 
   // One call embeds the question in both pivot languages.
-  const [qEmb, qArEmb] = await timed('embed', async () => { const v = await embed(u.q_ar.trim() ? [u.q_en, u.q_ar] : [u.q_en]); return [v[0], v[1] ?? null] as const; });
+  const issue = (u.issue_en ?? '').trim();
+  const [qEmb, qArEmb, issueEmb] = await timed('embed', async () => {
+    const texts = [u.q_en, u.q_ar.trim() || u.q_en, issue || u.q_en];
+    const v = await embed(texts);
+    return [v[0], u.q_ar.trim() ? v[1] : null, issue ? v[2] : null] as const;
+  });
 
   // Gate 2: verified-answer memory (skipped for personal cases, which always go to a specialist).
   if (!u.personal_case) {
@@ -83,7 +88,7 @@ export async function ask(input: AskInput, onStage: StageCb = () => {}): Promise
 
   // Gate 3: answerability. No generation without enough context.
   onStage('retrieve');
-  const r = await timed('retrieve', () => retrieve(u.q_en, qEmb, qArEmb));
+  const r = await timed('retrieve', () => retrieve(u.q_en, qEmb, qArEmb, { text: issue, emb: issueEmb }));
   a.flags.best_similarity = Number(r.bestSim.toFixed(3));
   if (input.trace) input.trace.retrieved = r.chunks.map(c => ({ id: c.id, path: c.path, similarity: c.similarity ?? null, score: Number((c.score ?? 0).toFixed(4)), text: c.text.slice(0, 260) }));
   const refer = async (reason: string, chunkIds: string[] = []) => {
@@ -123,12 +128,15 @@ export async function ask(input: AskInput, onStage: StageCb = () => {}): Promise
   const byId = new Map<string, Chunk>(r.chunks.map(c => [c.id, c]));
   const items: VerifyItem[] = [];
   const passagesOf = (ids: string[]) => ids.map(id => byId.get(id)?.text ?? '').filter(Boolean);
-  g.claims.forEach(c => items.push({ id: items.length, statement: c.text, passages: passagesOf(c.chunk_ids) }));
-  g.cases.forEach(c => items.push({ id: items.length, statement: `If ${c.condition}: ${c.ruling}`, passages: passagesOf(c.chunk_ids) }));
+  // Every statement is checked against all the passages the draft cites: support may sit in a neighbouring passage,
+  // but never outside what was retrieved and cited.
   const usedIds = [...new Set([...g.claims.flatMap(c => c.chunk_ids), ...g.cases.flatMap(c => c.chunk_ids)])];
-  if (g.summary.trim()) items.push({ id: items.length, statement: g.summary, passages: passagesOf(usedIds) });
+  const cited = passagesOf(usedIds);
+  g.claims.forEach(c => items.push({ id: items.length, statement: c.text, passages: cited }));
+  g.cases.forEach(c => items.push({ id: items.length, statement: `If ${c.condition}: ${c.ruling}`, passages: cited }));
+  if (g.summary.trim()) items.push({ id: items.length, statement: g.summary, passages: cited });
   // The practical instruction is checked too: it is the line a pilgrim is most likely to act on.
-  if (g.action.trim()) items.push({ id: items.length, statement: g.action, passages: passagesOf(usedIds) });
+  if (g.action.trim()) items.push({ id: items.length, statement: g.action, passages: cited });
 
   const strings = [g.summary, g.action, ...g.claims.map(c => c.text), ...g.cases.flatMap(c => [c.condition, c.ruling])];
   const [vr, tr] = await Promise.all([
