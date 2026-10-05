@@ -146,9 +146,21 @@ export async function ask(input: AskInput, onStage: StageCb = () => {}): Promise
   ]);
   const verdicts = vr.results;
   if (input.trace) input.trace.verification = verdicts.map(v => ({ ...v, statement: items[v.id]?.statement }));
-  const failed = verdicts.filter(v => v.verdict !== 'supported');
-  a.flags.verify = { checked: verdicts.length, failed: failed.length, model: vr.model, independent: !vr.fallback && !vr.model.startsWith(config.roles.gen.provider + '/') };
-  if (failed.length) { a.flags.verify_failures = failed.map(f => ({ statement: clip(items[f.id]?.statement ?? '', 160), verdict: f.verdict, reason: f.reason })); return refer('verification_failed', chunkIds); }
+  // What is shown is only what passed. A ruling (claim or case) that fails ends the answer in a referral.
+  // The one-line summary and the practical instruction are conveniences: if one of them fails it is removed,
+  // and the verified statements stand on their own.
+  const nRulings = g.claims.length + g.cases.length;
+  const failedAll = verdicts.filter(v => v.verdict !== 'supported');
+  const failed = failedAll.filter(v => v.id < nRulings);
+  const dropped: string[] = [];
+  let sIdx = -1; let aIdx = -1; { let k = nRulings; if (g.summary.trim()) sIdx = k++; if (g.action.trim()) aIdx = k++; }
+  if (!failed.length) {
+    if (sIdx >= 0 && failedAll.some(v => v.id === sIdx)) { dropped.push('summary'); }
+    if (aIdx >= 0 && failedAll.some(v => v.id === aIdx)) { dropped.push('action'); }
+  }
+  a.flags.verify = { checked: verdicts.length, failed: failedAll.length, dropped, model: vr.model, independent: !vr.fallback && !vr.model.startsWith(config.roles.gen.provider + '/') };
+  if (failedAll.length) a.flags.verify_failures = failedAll.map(f => ({ statement: clip(items[f.id]?.statement ?? '', 160), verdict: f.verdict, reason: f.reason }));
+  if (failed.length) return refer('verification_failed', chunkIds);
 
   // Assemble the answer in the asker's language.
   onStage('translate');
@@ -165,8 +177,11 @@ export async function ask(input: AskInput, onStage: StageCb = () => {}): Promise
   const nums = (ids: string[]) => [...new Set(ids.map(id => numberOf.get(id)!).filter(Boolean))];
   let k = 0; const out = tr.out;
   a.summary = out[k++]; a.action = out[k++];
+  if (dropped.includes('action')) a.action = '';
   a.claims = g.claims.map(c => ({ text: out[k++], src: nums(c.chunk_ids) }));
   a.cases = g.cases.map(c => ({ condition: out[k++], ruling: out[k++], src: nums(c.chunk_ids) }));
+  // A summary that did not pass is replaced by the first verified statement.
+  if (dropped.includes('summary')) a.summary = a.claims[0]?.text ?? (a.cases[0] ? `${a.cases[0].condition}: ${a.cases[0].ruling}` : '');
   a.sources = sources; a.disagreement = g.disagreement_noted; a.approx_translation = tr.approx;
   if (tr.approx) a.flags.glossary = tr.report;
   if (u.personal_case) { a.tier = 'referred'; a.notice = t(outLang, 'n_personal'); a.flags.refer_reason = 'personal_case'; }

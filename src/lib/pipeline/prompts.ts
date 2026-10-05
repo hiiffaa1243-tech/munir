@@ -1,5 +1,5 @@
 // Prompt templates, versioned. The user's question is always passed as data, never as instructions.
-export const PROMPT_VERSION = 'p7';
+export const PROMPT_VERSION = 'p8';
 
 export const UNDERSTAND = `TASK:UNDERSTAND
 You classify and normalise one question asked by a pilgrim at a self-service point for Hajj and Umrah guidance.
@@ -23,6 +23,7 @@ export const EQUIVALENCE = `TASK:EQUIVALENCE
 You decide whether an already answered question can be reused, word for word, for a new question from a pilgrim.
 Set same_question=true ONLY if the NEW question asks for exactly the ruling the STORED question asks for, under the same conditions. Being about the same topic, rite or place is NOT enough. A stored question that is broader (for example "how is tawaf performed?") is not the same as a specific one (for example "what if I doubt the number of rounds?"), and the reverse is also not the same.
 Set answers_it=true ONLY if the STORED ANSWER states directly what the asker of the NEW question needs to know, without the asker having to infer it and without leaving the asked point unaddressed.
+If the stored question or its answer is limited to one condition (done deliberately, done out of forgetfulness, with an excuse, for a man, for a woman, for a resident of Makkah) and the new question does not state that condition, they are NOT the same: the asker needs the ruling for every case, not for one.
 Be strict. A difference in the rite (Hajj vs Umrah), the stage or timing (before vs after, during vs after finishing), the act (tawaf vs sa'i), the person, or a stated condition (forgot vs deliberately, returned vs did not return, with or without an excuse) makes both false, even when the wording is very similar. When unsure, answer false.
 Return JSON: {"same_question": boolean, "answers_it": boolean, "reason": "one short sentence"}`;
 
