@@ -84,6 +84,7 @@ describe('arabic joins and glosses', () => {
   it('does not double the article or gloss for Arabic readers', () => {
     const seen = new Set<string>();
     expect(unmaskAr('في [[T05]] ول[[T05]] وال[[T05]] ب[[T05]]', 'ar', seen)).toBe('في الإحرام وللإحرام والإحرام بالإحرام');
+    expect(unmaskAr('دخل الإحرام للـ[[T29]] ثم لـ[[T29]] وبالـ[[T29]]', 'ar', new Set())).toBe('دخل الإحرام للعمرة ثم للعمرة وبالعمرة');
   });
   it('adds one gloss in other languages, never inside brackets', () => {
     const seen = new Set<string>();

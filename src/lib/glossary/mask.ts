@@ -34,6 +34,8 @@ export const countTokens = (text: string): string[] => { const ids: string[] = [
 
 /** Restore tokens with the approved rendering. `seen` tracks first mentions so the gloss is added once per answer. */
 export function unmask(text: string, lang: string, seen: Set<string>): string {
+  // A tatweel written between a particle and the token ("للـ[[T29]]") is dropped so the joining rules below apply.
+  if (lang === 'ar') text = text.replace(/ـ+\s*(?=\[\[\s*T\d+\s*\]\])/g, '');
   return text.replace(TOKEN_RE, (m: string, id: string, offset: number, whole: string) => {
     const t = BY_ID.get(id); if (!t) return m;
     let base = (t as any)[lang] as string | undefined ?? t.en;
@@ -41,7 +43,7 @@ export function unmask(text: string, lang: string, seen: Set<string>): string {
     if (lang === 'ar') {
       // (a particle written with a tatweel and a space, "لـ ", is rejoined by tidy() afterwards)
       // Arabic joins particles to the word: "ال" must not be doubled, and "لـ" + "الـ" is written "للـ".
-      if (/ال$/.test(before)) base = base.replace(/^ال/, '');
+      if (/ال$/.test(before) || /(^|[\s(«"])[وف]?لل$/.test(before)) base = base.replace(/^ال/, '');
       else if (/(^|[\s(«"])[وف]?ل$/.test(before) && base.startsWith('ال')) base = base.slice(1);
     }
     // A short explanation follows the first mention, except for Arabic readers (the term is their own word)
