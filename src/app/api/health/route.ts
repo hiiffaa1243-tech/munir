@@ -22,22 +22,27 @@ export async function GET(req: Request) {
   };
   try {
     const db = sb(); const counts: Record<string, number | string> = {};
-    for (const t of ['sources', 'chunks', 'verified_answers', 'interactions', 'tickets']) {
-      const r = await db.from(t).select('id', { count: 'exact' }).limit(1);
-      const bad = !!r.error || r.count === null || r.count === undefined;
-      counts[t] = bad ? `error: ${r.error?.message || r.error?.code || 'table not reachable (schema not run, or privileges missing)'}` : (r.count as number);
-      if (bad) out.ok = false;
-    }
+    await Promise.all(['sources', 'chunks', 'verified_answers', 'interactions', 'tickets'].map(async t => {
+      try {
+        const r = await db.from(t).select('id', { count: 'exact' }).limit(1);
+        const bad = !!r.error || r.count === null || r.count === undefined;
+        counts[t] = bad ? `error: ${r.error?.message || r.error?.code || 'table not reachable (schema not run, or privileges missing)'}` : (r.count as number);
+        if (bad) out.ok = false;
+      } catch (e) { counts[t] = `error: ${String((e as Error).message).slice(0, 160)}`; out.ok = false; }
+    }));
     out.db = counts;
   } catch (e) { out.ok = false; out.db = { error: String((e as Error).message) }; }
   if (deep) {
     out.models = {};
-    for (const role of ['fast', 'gen', 'verify'] as Role[]) {
+    // All roles are pinged at once so the whole self-test stays short.
+    await Promise.all((['fast', 'gen', 'verify'] as Role[]).map(async role => {
       try { const r = await chatJson(role, [{ role: 'system', content: 'Reply with the JSON object {"ok": true}.' }, { role: 'user', content: 'ping' }], { maxTokens: 50 }); out.models[role] = { ok: (r.data as any)?.ok === true, ms: r.usage.ms, used: `${r.usage.provider}/${r.usage.model}`, fallback: !!r.usage.fallback }; if (r.usage.fallback) out.verifier_fallback_in_use = true; }
       catch (e) { out.ok = false; out.models[role] = { ok: false, error: String((e as Error).message).slice(0, 300) }; }
-    }
+    }));
     try { const v = await embed(['ping']); out.models.embed = { ok: v[0]?.length === config.embedDim, dim: v[0]?.length }; if (v[0]?.length !== config.embedDim) out.ok = false; }
     catch (e) { out.ok = false; out.models.embed = { ok: false, error: String((e as Error).message).slice(0, 300) }; }
   }
-  return json(out, out.ok ? 200 : 503);
+  // The report itself is always readable; monitors that want a failing status code pass ?strict=1.
+  const strict = new URL(req.url).searchParams.get('strict') === '1';
+  return json(out, out.ok || !strict ? 200 : 503);
 }

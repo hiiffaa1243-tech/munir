@@ -8,7 +8,9 @@ export function sb(): SupabaseClient {
   if (config.mock) return mockDb() as unknown as SupabaseClient;
   if (!client) {
     if (!config.supabaseUrl || !config.supabaseServiceKey) throw new Error('SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are not set');
-    client = createClient(config.supabaseUrl, config.supabaseServiceKey, { auth: { persistSession: false, autoRefreshToken: false } });
+    // Every database call has a hard time limit, so a slow or unreachable database cannot hang a request.
+    const timed: typeof fetch = (input, init) => fetch(input, { ...init, signal: init?.signal ?? AbortSignal.timeout(12_000) });
+    client = createClient(config.supabaseUrl, config.supabaseServiceKey, { auth: { persistSession: false, autoRefreshToken: false }, global: { fetch: timed } });
   }
   return client;
 }
