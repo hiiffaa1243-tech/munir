@@ -39,6 +39,7 @@ export function unmask(text: string, lang: string, seen: Set<string>): string {
     let base = (t as any)[lang] as string | undefined ?? t.en;
     const before = whole.slice(0, offset); const after = whole.slice(offset + m.length);
     if (lang === 'ar') {
+      // (a particle written with a tatweel and a space, "لـ ", is rejoined by tidy() afterwards)
       // Arabic joins particles to the word: "ال" must not be doubled, and "لـ" + "الـ" is written "للـ".
       if (/ال$/.test(before)) base = base.replace(/^ال/, '');
       else if (/(^|[\s(«"])[وف]?ل$/.test(before) && base.startsWith('ال')) base = base.slice(1);
@@ -71,3 +72,15 @@ export function checkIntegrity(maskedSource: string, translatedMasked: string, f
 }
 
 export const termById = (id: string) => BY_ID.get(id);
+
+/** What each protected token will become in the target language. Given to the translator so articles, gender and particles come out right. */
+export function legend(ids: string[], lang: string): string {
+  return [...new Set(ids)].map(id => { const t = BY_ID.get(id); return t ? `[[${id}]] = ${((t as any)[lang] as string | undefined) ?? t.en}` : ''; }).filter(Boolean).join('\n');
+}
+
+/** Tidy what masking can leave behind: a term repeated in its own brackets, and Arabic particles separated from their word. */
+export function tidy(text: string, lang: string): string {
+  let out = text.replace(/([^\s()（）][^()（）]{1,48}?)\s*[(（]\s*\1\s*[)）]/g, '$1');
+  if (lang === 'ar') out = out.replace(/(^|\s)([وف]?)لـ\s*ال(?=[\u0621-\u064A])/g, '$1$2لل').replace(/([\u0621-\u064A])ـ\s+(?=[\u0621-\u064A])/g, '$1');
+  return out.replace(/ {2,}/g, ' ').trim();
+}

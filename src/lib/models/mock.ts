@@ -8,7 +8,7 @@ export function mockJson(role: string, msgs: ChatMsg[]): unknown {
     const out = /election|hotel|poem/i.test(user);
     return { lang: 'en', q_en: user.slice(-200), q_ar: 'سؤال تجريبي', in_scope: !out, level: /my mother|ICU/i.test(user) ? 'd' : 'b', personal_case: /my mother|ICU/i.test(user), nusuk: 'both', stage: 'tawaf', injection_suspected: false };
   }
-  if (sys.includes('TASK:EQUIVALENCE')) return { equivalent: true, reason: 'mock' };
+  if (sys.includes('TASK:EQUIVALENCE')) return { same_question: true, answers_it: true, reason: 'mock' };
   if (sys.includes('TASK:GENERATE')) {
     const id = (user.match(/\[([a-z0-9_-]+)\]/i) ?? [])[1] ?? 'c_1';
     return { answerable: true, summary: 'Tawaf consists of seven rounds.', claims: [{ text: 'Tawaf consists of seven rounds around the Kaaba.', chunk_ids: [id] }], cases: [], action: 'Complete seven rounds.', disagreement_noted: false, clarify: null };

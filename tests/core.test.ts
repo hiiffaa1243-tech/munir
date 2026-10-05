@@ -92,3 +92,10 @@ describe('arabic joins and glosses', () => {
     expect(unmaskAr('[[T05]] puis [[T05]]', 'fr', new Set())).toMatch(/^ihram \(.+\) puis ihram$/);
   });
 });
+
+import { tidy, legend } from '@/lib/glossary/mask';
+describe('tidy and legend', () => {
+  it('removes a term repeated in its own brackets', () => { expect(tidy('tawaf wada (tawaf wada) tidak wajib', 'id')).toBe('tawaf wada tidak wajib'); });
+  it('rejoins an Arabic particle written with a tatweel', () => { expect(tidy('من كسب حلال لـ الحج والعمرة', 'ar')).toBe('من كسب حلال للحج والعمرة'); });
+  it('tells the translator what a token stands for', () => { expect(legend(['T37', 'T37'], 'fr')).toBe('[[T37]] = Pierre noire'); });
+});

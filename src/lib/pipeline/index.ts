@@ -44,6 +44,7 @@ export async function ask(input: AskInput, onStage: StageCb = () => {}): Promise
     const f = baseAnswer(u, hint); f.flags = { refer_reason: 'understand_failed', error: String((e as Error)?.message ?? e).slice(0, 200) }; f.notice = t(hint, 'n_referred');
     T.total = Date.now() - t0; f.timings = T; await persist(input, u, f, [], null); return f;
   }
+  if (input.trace) input.trace.understanding = u;
   const outLang = isLang(u.lang) || ['tr', 'bn'].includes(u.lang) ? u.lang : hint;
   const a = baseAnswer(u, outLang);
   a.flags.injection_suspected = u.injection_suspected; a.flags.beta_language = ['tr', 'bn'].includes(outLang);
@@ -63,7 +64,7 @@ export async function ask(input: AskInput, onStage: StageCb = () => {}): Promise
   // Gate 2: verified-answer memory (skipped for personal cases, which always go to a specialist).
   if (!u.personal_case) {
     onStage('match');
-    const hit = await timed('match', () => findVerified(u.q_en, qEmb));
+    const hit = await timed('match', () => findVerified(u.q_en, qEmb, input.trace));
     if (hit) {
       onStage('translate');
       const va = hit.va;
@@ -84,6 +85,7 @@ export async function ask(input: AskInput, onStage: StageCb = () => {}): Promise
   onStage('retrieve');
   const r = await timed('retrieve', () => retrieve(u.q_en, qEmb, qArEmb));
   a.flags.best_similarity = Number(r.bestSim.toFixed(3));
+  if (input.trace) input.trace.retrieved = r.chunks.map(c => ({ id: c.id, path: c.path, similarity: c.similarity ?? null, score: Number((c.score ?? 0).toFixed(4)), text: c.text.slice(0, 260) }));
   const refer = async (reason: string, chunkIds: string[] = []) => {
     a.tier = 'referred'; a.flags.refer_reason = reason;
     a.notice = t(outLang, u.personal_case ? 'n_personal_bare' : 'n_referred');
@@ -105,6 +107,7 @@ export async function ask(input: AskInput, onStage: StageCb = () => {}): Promise
     }
   });
   const chunkIds = r.chunks.map(c => c.id);
+  if (input.trace) { input.trace.generated = gen; input.trace.citation_problems = problems; }
   if (!gen) { a.flags.citation_problems = problems; return refer('citation_enforcement_failed', chunkIds); }
   const g = gen as Gen;
   if (g.clarify && !input.clarified && !u.personal_case) {
@@ -133,6 +136,7 @@ export async function ask(input: AskInput, onStage: StageCb = () => {}): Promise
     timed('translate', () => translateStrings(strings, outLang)),
   ]);
   const verdicts = vr.results;
+  if (input.trace) input.trace.verification = verdicts.map(v => ({ ...v, statement: items[v.id]?.statement }));
   const failed = verdicts.filter(v => v.verdict !== 'supported');
   a.flags.verify = { checked: verdicts.length, failed: failed.length, model: vr.model, independent: !vr.fallback && !vr.model.startsWith(config.roles.gen.provider + '/') };
   if (failed.length) { a.flags.verify_failures = failed.map(f => ({ statement: clip(items[f.id]?.statement ?? '', 160), verdict: f.verdict, reason: f.reason })); return refer('verification_failed', chunkIds); }

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { config, LANG_NAMES } from '@/lib/config';
 import { chatJson, embed } from '@/lib/models';
 import { matchChunks, searchChunks, matchVerified as dbMatchVerified, type Chunk, type VerifiedAnswer } from '@/lib/db';
-import { mask, unmask, checkIntegrity } from '@/lib/glossary/mask';
+import { mask, unmask, checkIntegrity, legend, tidy } from '@/lib/glossary/mask';
 import { EQUIVALENCE, GENERATE, TRANSLATE, UNDERSTAND, VERIFY } from './prompts';
 import type { Understanding } from './types';
 
@@ -30,15 +30,16 @@ export async function understand(text: string, langHint?: string): Promise<Under
 }
 
 // ---------- 2. verified-answer memory ----------
-export async function findVerified(qEn: string, qEmb: number[]): Promise<{ va: VerifiedAnswer; reason: string } | null> {
+export async function findVerified(qEn: string, qEmb: number[], trace?: Record<string, unknown>): Promise<{ va: VerifiedAnswer; reason: string } | null> {
   const cands = (await dbMatchVerified(qEmb, 4)).filter(c => (c.similarity ?? 0) >= config.thresholds.vaSimMin).slice(0, 3);
   if (!cands.length) return null;
   // The nearest stored questions are checked at once; the closest one that passes the strict test wins.
-  const checks = await Promise.all(cands.map(c => chatJson<{ equivalent: boolean; reason: string }>('fast', [
+  const checks = await Promise.all(cands.map(c => chatJson<{ same_question: boolean; answers_it: boolean; reason: string }>('fast', [
     { role: 'system', content: EQUIVALENCE },
     { role: 'user', content: `NEW QUESTION:\n${qEn}\n\nSTORED QUESTION:\n${c.q_canon}\n\nSTORED ANSWER:\n${c.answer_en}` },
   ], { maxTokens: 200 }).then(r => r.data).catch(() => null)));
-  const i = checks.findIndex(d => d?.equivalent === true);
+  if (trace) trace.memory = cands.map((c, k) => ({ code: c.code, similarity: Number((c.similarity ?? 0).toFixed(3)), stored_question: c.q_canon, check: checks[k] }));
+  const i = checks.findIndex(d => d?.same_question === true && d?.answers_it === true);
   return i >= 0 ? { va: cands[i], reason: checks[i]?.reason ?? '' } : null;
 }
 
@@ -141,19 +142,22 @@ export async function translateStrings(strings: string[], lang: string): Promise
     const out = strings.map(() => ''); idx.forEach((i, k) => { out[i] = part.out[k]; });
     return { ...part, out };
   }
-  const masked = strings.map(s => mask(s).text);
+  const maskedAll = strings.map(s => mask(s));
+  const masked = maskedAll.map(m => m.text);
+  const key = legend(maskedAll.flatMap(m => m.ids), lang);
   const target = LANG_NAMES[lang] ?? lang;
   let last: Translated = { out: strings, approx: true, report: { missing: [], forbidden: [] } };
   for (let attempt = 0; attempt < 2; attempt++) {
     let data: { out: string[] } | undefined;
     try { ({ data } = await chatJson<{ out: string[] }>('fast', [
       { role: 'system', content: TRANSLATE(target) },
-      { role: 'user', content: `${attempt ? 'Your previous translation changed or lost protected tokens. Copy every [[T..]] token exactly.\n' : ''}INPUT:\n${JSON.stringify(masked)}` },
+      { role: 'user', content: `${attempt ? 'Your previous translation changed or lost protected tokens. Copy every [[T..]] token exactly.\n' : ''}${key ? `LEGEND (what each token will be replaced with; use it only to get articles, gender and particles right, and still output the token itself):\n${key}\n\n` : ''}INPUT:\n${JSON.stringify(masked)}` },
     ], { maxTokens: 3500 })); } catch { continue; }
     const tr = Array.isArray(data?.out) ? data.out.map(String) : [];
     if (tr.length !== masked.length) continue;
     const seen = new Set<string>();
-    const final = tr.map(s => unmask(s, lang, seen));
+    const cap = (s: string) => (/^[a-zà-ÿ]/.test(s) ? s[0].toUpperCase() + s.slice(1) : s);
+    const final = tr.map(s => cap(tidy(unmask(s, lang, seen), lang)));
     const missing: string[] = []; const forbidden: string[] = []; let ok = true;
     masked.forEach((m, i) => { const r = checkIntegrity(m, tr[i], final[i], lang); if (!r.ok) { ok = false; missing.push(...r.missing); forbidden.push(...r.forbidden); } });
     last = { out: final, approx: !ok, report: { missing, forbidden } };

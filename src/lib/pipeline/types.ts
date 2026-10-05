@@ -35,5 +35,6 @@ export interface Answer {
 export interface AskInput {
   text: string; langHint?: string; sessionId?: string; notebookId?: string | null; kiosk?: string;
   clarified?: boolean; isEval?: boolean;
+  trace?: Record<string, unknown>;   // filled with every intermediate result when a specialist asks for a trace
 }
 export type StageCb = (stage: string) => void;
