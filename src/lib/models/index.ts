@@ -101,7 +101,7 @@ async function callRole(role: Role, rcBase: RoleConfig, msgs: ChatMsg[], json: b
   let lastErr: unknown;
   for (const model of models) {
     const rc = { provider: rcBase.provider, model };
-    for (let attempt = 0; attempt < 2; attempt++) {
+    for (let attempt = 0; attempt < 3; attempt++) {
       try {
         const r = await call(rc, msgs, json, maxTokens);
         const data = parse ? extractJson(r.text) : null;
@@ -114,7 +114,8 @@ async function callRole(role: Role, rcBase: RoleConfig, msgs: ChatMsg[], json: b
         if ((e as Error)?.name === 'AbortError') { lastErr = new ModelError(rc.provider, 504, `${rc.provider} timed out`); break; } // no second wait on a timeout
         // An overloaded or rate-limited model: with other candidates listed, move on at once instead of waiting on it.
         if (models.length > 1) { chosen.delete(key); break; }
-        if (attempt < 1) await sleep(800);
+        // A single-model role waits out a rate limit instead of failing the question.
+        if (attempt < 2) await sleep(e instanceof ModelError && e.status === 429 ? (attempt ? 5000 : 2000) : 800);
       }
     }
   }
