@@ -58,22 +58,30 @@ export function unmask(text: string, lang: string, seen: Set<string>): string {
 export interface IntegrityReport { ok: boolean; missing: string[]; forbidden: string[]; leftover: boolean }
 
 /** Post-check: every masked term came back, and no forbidden rendering appears for a term that was present. */
+// A rendering as it would appear inside running text: lower-cased, without diacritics, Arabic article or bracketed note.
+const bare = (t: string) => t.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f\u064B-\u065F\u0670\u0640]/g, '').replace(/\s*\(.*?\)/g, '').replace(/[آأإٱ]/g, 'ا').replace(/^ال/, '').trim();
+
+/**
+ * Post-check on a translated string. Every term that was protected in the source must be present in the result
+ * in its approved rendering, whether the translator kept the token or wrote the approved word itself; no forbidden
+ * rendering may appear for a term that was present; and no raw token may be left over.
+ */
 export function checkIntegrity(maskedSource: string, translatedMasked: string, finalText: string, lang: string): IntegrityReport {
-  const src = countTokens(maskedSource).sort(); const got = countTokens(translatedMasked).sort();
-  const missing = src.filter((id, i) => got[i] !== id);
-  const forbidden: string[] = [];
-  for (const id of new Set(src)) {
-    const t = BY_ID.get(id);
-    for (const w of ((t?.forbid as any)?.[lang] ?? []) as string[]) {
+  const src = [...new Set(countTokens(maskedSource))]; const kept = new Set(countTokens(translatedMasked));
+  const hay = bare(finalText).replace(/[آأإٱ]/g, 'ا');
+  const missing: string[] = []; const forbidden: string[] = [];
+  for (const id of src) {
+    const t = BY_ID.get(id); if (!t) continue;
+    const want = bare(((t as any)[lang] as string | undefined) ?? t.en);
+    if (!kept.has(id) && !hay.includes(want)) missing.push(id);
+    for (const w of ((t.forbid as any)?.[lang] ?? []) as string[]) {
       const re = new RegExp(`(?<![\\p{L}])${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}])`, 'iu');
       if (re.test(finalText)) forbidden.push(`${id}:${w}`);
     }
   }
   const leftover = /\[\[\s*T\d+\s*\]\]/.test(finalText);
-  return { ok: src.length === got.length && missing.length === 0 && forbidden.length === 0 && !leftover, missing, forbidden, leftover };
+  return { ok: missing.length === 0 && forbidden.length === 0 && !leftover, missing, forbidden, leftover };
 }
-
-export const termById = (id: string) => BY_ID.get(id);
 
 /** What each protected token will become in the target language. Given to the translator so articles, gender and particles come out right. */
 export function legend(ids: string[], lang: string): string {

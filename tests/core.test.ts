@@ -113,3 +113,11 @@ describe('quotation check', () => {
     expect(r.ok).toBe(true); expect(r.unquoted).toBe(1); expect(r.quoted).toBe(0);
   });
 });
+
+describe('integrity accepts the approved word written out', () => {
+  it('passes when the translator wrote the approved rendering instead of the token', () => {
+    const src = mask('It is not allowed to use perfume after entering Ihram.').text;
+    expect(checkIntegrity(src, 'لا يجوز استعمال الطيب بعد الدخول في الإحرام.', 'لا يجوز استعمال الطِّيب بعد الدخول في الإحرام.', 'ar').ok).toBe(true);
+    expect(checkIntegrity(src, 'لا يجوز استعمال الطيب بعد الدخول في النسك.', 'لا يجوز استعمال الطيب بعد الدخول في النسك.', 'ar').ok).toBe(false);
+  });
+});
