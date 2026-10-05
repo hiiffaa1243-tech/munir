@@ -56,7 +56,7 @@ export async function ask(input: AskInput, onStage: StageCb = () => {}): Promise
         text = tr.out[0]; a.approx_translation = tr.approx;
         if (!tr.approx) { try { await sb().from('verified_answers').update({ translations: { ...(va.translations ?? {}), [outLang]: text } }).eq('id', va.id); } catch { /* cache only */ } }
       }
-      a.tier = 'verified'; a.summary = text; a.notice = t(outLang, 'n_verified');
+      a.tier = 'verified'; a.summary = text; a.notice = t(outLang, va.code?.startsWith('PC-') ? 'n_published' : 'n_verified');
       a.verified = { code: va.code, author: va.author_name, source_title: va.source_title, source_locator: va.source_locator, source_quote: va.source_quote };
       a.flags.va_similarity = va.similarity; a.flags.va_reason = hit.reason;
       return done([], va.id);
@@ -107,6 +107,8 @@ export async function ask(input: AskInput, onStage: StageCb = () => {}): Promise
   g.cases.forEach(c => items.push({ id: items.length, statement: `If ${c.condition}: ${c.ruling}`, passages: passagesOf(c.chunk_ids) }));
   const usedIds = [...new Set([...g.claims.flatMap(c => c.chunk_ids), ...g.cases.flatMap(c => c.chunk_ids)])];
   if (g.summary.trim()) items.push({ id: items.length, statement: g.summary, passages: passagesOf(usedIds) });
+  // The practical instruction is checked too: it is the line a pilgrim is most likely to act on.
+  if (g.action.trim()) items.push({ id: items.length, statement: g.action, passages: passagesOf(usedIds) });
 
   const strings = [g.summary, g.action, ...g.claims.map(c => c.text), ...g.cases.flatMap(c => [c.condition, c.ruling])];
   const [vr, tr] = await Promise.all([

@@ -22,7 +22,8 @@ export default function ServicePoint() {
   const [saving, setSaving] = useState(false);
   const [clar, setClar] = useState('');
   const chooseLang = useCallback((l: string) => { const u = uiLang(l); if (u !== l) return; setLang(u); saveLang(u); applyDocLang(u); }, []);
-  const asker = useAsker({ lang, sessionId, kiosk, onLang: chooseLang });
+  // The whole screen follows the language the visitor actually used.
+  const asker = useAsker({ lang, sessionId, kiosk, onLang: chooseLang, onAnswer: a => chooseLang(a.lang) });
   const { reset } = asker;
 
   const newVisitor = useCallback(() => { setSessionId(randomId(18)); setText(''); setClaim(null); setClar(''); reset(); }, [reset]);
@@ -32,7 +33,7 @@ export default function ServicePoint() {
   useEffect(() => {
     if (boot.current) return; boot.current = true;
     const p = new URLSearchParams(location.search);
-    const l = uiLang(p.get('lang') ?? savedLang()); setLang(l); applyDocLang(l);
+    const l = uiLang(p.get('lang') ?? savedLang(false)); setLang(l); applyDocLang(l);
     setKiosk(p.get('k') ?? undefined);
     const sid = randomId(18); setSessionId(sid);
     const q = p.get('q');

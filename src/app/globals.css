@@ -109,3 +109,4 @@ h2.pg{font-size:20px;color:var(--navy);margin:28px 0 10px}
 .resolved{border:1.5px solid var(--good);background:var(--goodbg);border-radius:12px;padding:12px 14px;margin-top:12px}
 .pending{border:1.5px dashed var(--line);border-radius:12px;padding:10px 14px;margin-top:12px;color:var(--muted);font-size:15px}
 .banner{background:var(--warnbg);color:var(--warn);border-radius:12px;padding:8px 14px;font-size:14.5px;margin-bottom:12px}
+@media (max-width:560px){.askbox{padding:10px;gap:8px}.askbox textarea{font-size:17px;min-height:48px}.mic{width:52px;height:52px}.btn{padding:10px 16px;min-height:48px}.brand b{font-size:26px}.sum{font-size:19px}.card{padding:16px}}

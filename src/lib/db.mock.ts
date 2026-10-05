@@ -6,6 +6,8 @@ const store: Record<string, Row[]> = g.__munirMock ?? (g.__munirMock = {
   chunks: [{ id: 'c_demo_1', source_id: 's_demo', path: 'Tawaf', page: 12, text: 'Tawaf consists of seven rounds around the Kaaba, starting at the Black Stone.' }],
   verified_answers: [], notebooks: [], claims: [], interactions: [], tickets: [], reports: [], audit_log: [], eval_results: [],
 });
+// Column defaults the real schema applies.
+const DEFAULTS: Record<string, Row> = { claims: { used: false }, tickets: { status: 'open', notebook_id: null }, verified_answers: { status: 'published', translations: {} }, interactions: { is_eval: false, notebook_id: null }, sources: { active: true } };
 const uid = () => (globalThis.crypto as Crypto).randomUUID();
 
 class Q {
@@ -32,7 +34,7 @@ class Q {
     const match = (r: Row) => this.filters.every(f => f(r));
     let rows: Row[] = [];
     if (this.op === 'insert' || this.op === 'upsert') {
-      const arr = (Array.isArray(this.payload) ? this.payload : [this.payload]).map((p: Row) => ({ id: uid(), created_at: new Date().toISOString(), ...p }));
+      const arr = (Array.isArray(this.payload) ? this.payload : [this.payload]).map((p: Row) => ({ id: uid(), created_at: new Date().toISOString(), ...(DEFAULTS[this.table] ?? {}), ...p }));
       t.push(...arr); rows = arr;
     } else if (this.op === 'update') { rows = t.filter(match); rows.forEach(r => Object.assign(r, this.payload)); }
     else if (this.op === 'delete') { rows = t.filter(match); store[this.table] = t.filter(r => !match(r)); }

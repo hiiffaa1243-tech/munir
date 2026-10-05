@@ -49,8 +49,10 @@ export function notebookKey(create: boolean): string | null {
   } catch { return null; }
 }
 
-export function savedLang(): UiLang {
+/** Saved choice first. A phone falls back to its own language; a shared screen falls back to Arabic. */
+export function savedLang(useDevice = true): UiLang {
   try { const s = localStorage.getItem('munir_lang'); if (s) return uiLang(s); } catch { /* private mode */ }
+  if (!useDevice) return 'ar';
   const n = typeof navigator !== 'undefined' ? navigator.language.slice(0, 2).toLowerCase() : 'ar';
   return n in { ar: 1, en: 1, ur: 1, id: 1, fr: 1 } ? (n as UiLang) : 'ar';
 }

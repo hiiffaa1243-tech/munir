@@ -1,8 +1,8 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 
-const TIER: Record<string, string> = { verified: 'معتمدة', grounded: 'من مصدر', referred: 'إحالة', clarify: 'استيضاح', out_of_scope: 'خارج النطاق', abstain: 'امتناع أو إحالة' };
-const CAT: Record<string, string> = { A: 'عمرة لها نص', B: 'حج له نص', C: 'مسائل خلافية', CX: 'تحتاج تفصيلاً بحسب الحال', D: 'حالات شخصية (فتوى خاصة)', E: 'خارج النطاق', F: 'محاولات تلاعب' };
+const TIER: Record<string, string> = { verified: 'إجابة معتمدة', grounded: 'إجابة من مصدر', referred: 'إحالة', clarify: 'استيضاح أو تفصيل', out_of_scope: 'خارج النطاق', not_verified: 'لا تُطابَق بإجابة مخزنة', answered: 'أجاب', abstained: 'امتنع' };
+const CAT: Record<string, string> = { A: 'عمرة لها نص', B: 'حج له نص', C: 'لها إجابة معتمدة', CX: 'مطابقة خادعة', D: 'يختلف بحال السائل', E: 'شخصية أو خارج النطاق', F: 'مضللة أو عدائية أو خلافية' };
 const pct = (x: number | null | undefined) => (x === null || x === undefined ? '—' : `${Math.round(x * 100)}%`);
 
 function Tile({ v, k, sub }: { v: string; k: string; sub?: string }) { return <div className="tile"><div className="v">{v}</div><div className="k">{k}</div>{sub && <div className="small muted" style={{ marginTop: 4 }}>{sub}</div>}</div>; }
@@ -63,20 +63,20 @@ export default function EvalPage() {
       <nav className="tabs"><button className="chip" aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>الكل</button><button className="chip" aria-pressed={filter === 'fail'} onClick={() => setFilter('fail')}>الإخفاقات فقط</button></nav>
       <div className="tablewrap"><table className="t">
         <thead><tr><th>#</th><th>السؤال</th><th>الفئة</th><th>المتوقع</th><th>تصرف منير</th><th /></tr></thead>
-        <tbody>{rows.map((c: any) => (<>
-          <tr key={c.id}>
+        <tbody>{rows.map((c: any) => (<Fragment key={c.id}>
+          <tr>
             <td dir="ltr">{c.id}</td><td><div dir="auto">{c.question}</div>{c.lang !== 'ar' && <div className="muted small">{c.meaning_ar}</div>}</td>
             <td className="small">{CAT[c.category] ?? c.category}</td><td className="small">{TIER[c.expected] ?? c.expected}</td>
             <td>{c.tier ? <span className={`pill ${c.ok ? 'g' : 'b'}`}>{TIER[c.tier] ?? c.tier}</span> : <span className="pill">لم يُشغَّل</span>}</td>
             <td>{c.munir && <button className="btn sm ghost" onClick={() => setOpen(open === c.id ? null : c.id)}>{open === c.id ? 'إخفاء' : 'عرض'}</button>}</td>
           </tr>
           {open === c.id && (
-            <tr key={`${c.id}-x`}><td colSpan={6}><div className="cmp">
+            <tr><td colSpan={6}><div className="cmp">
               <div><b>منير</b>{c.munir?.reason && <span className="pill" style={{ marginInlineStart: 8 }} dir="ltr">{c.munir.reason}</span>}<div className="pre" dir="auto">{c.munir?.text || '(إحالة بلا إجابة)'}</div></div>
               <div><b>النموذج العام</b>{c.baseline?.judge && <span className="pill w" style={{ marginInlineStart: 8 }}>غير مسند: {c.baseline.judge.unsupported_claims ?? 0}</span>}<div className="pre" dir="auto">{c.baseline?.text || '(لم يُشغَّل)'}</div></div>
             </div></td></tr>
           )}
-        </>))}</tbody>
+        </Fragment>))}</tbody>
       </table></div>
     </div></main>
   );

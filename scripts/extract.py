@@ -32,6 +32,7 @@ def clean_line(s):
     s = ARABIC.sub(' ', s).replace('­', '').replace('', '•')
     s = re.sub(r'[﴾﴿]', ' ', s)
     s = re.sub(r'_{4,}', ' ', s)
+    s = re.sub(r'«\s*»|“\s*”|\(\s*\)|"\s+"', ' ', s)   # quotation shells left behind by removed Arabic text
     return re.sub(r'\s+', ' ', s).strip()
 
 def page_blocks(page):
@@ -41,7 +42,10 @@ def page_blocks(page):
         if b.get('type') != 0: continue
         lines, sizes, bold, total = [], [], 0, 0
         for ln in b['lines']:
-            t = ''.join(sp['text'] for sp in ln['spans'])
+            lsize = max((sp['size'] for sp in ln['spans'] if sp['text'].strip()), default=0)
+            # footnote markers: superscript or clearly smaller digits inside a line
+            is_mark = lambda sp: sp['text'].strip().isdigit() and len(sp['text'].strip()) <= 2 and (sp['flags'] & 1 or sp['size'] < lsize * 0.8)
+            t = ''.join(sp['text'] for sp in ln['spans'] if not is_mark(sp))
             for sp in ln['spans']:
                 n = len(sp['text'].strip()); total += n
                 if n: sizes.append((sp['size'], n))
@@ -78,7 +82,11 @@ def extract(path):
     body = sizes.most_common(1)[0][0] if sizes else 11
     paras = []  # (page, text, is_heading)
     for pi, blocks in enumerate(pages):
+        in_notes = False
         for b in blocks:
+            small = b['size'] <= body * 0.9
+            if small and re.match(r'^\(?\d{1,2}\)?\s+\S', b['lines'][0]): in_notes = True
+            if in_notes and small: continue
             lines = [l for l in b['lines'] if norm_key(l) not in repeated and not re.fullmatch(r'[\d\s\-–—|.]+', l) and 'islamhouse' not in l.lower()]
             if not lines: continue
             text = join_lines(lines)
@@ -164,6 +172,13 @@ def chunk_fatwas(paras):
         if buf.strip(): out.append({**c, 'text': head + buf.strip()})
     return out, qa
 
+def post_clean(t):
+    """Final pass on assembled text: page-bottom notes that survived, and quotation shells split across lines."""
+    t = re.sub(r'\s*Selected from the collection of Fatwas by the Permanent Committee[^.]*?context\.', ' ', t)
+    t = re.sub(r'\s\d{1,2} Narrated by [^.]{0,200}?(?:no\. \([\d/]+\)\.|\(\d+/\d+\)\]?)', ' ', t)
+    t = re.sub(r'«\s*»|“\s*”|\(\s*\)', ' ', t)
+    return re.sub(r'\s+([,.;:!?])', r'\1', re.sub(r'\s+', ' ', t)).strip()
+
 def main(src_dir, out_dir):
     src_dir, out_dir = pathlib.Path(src_dir), pathlib.Path(out_dir); out_dir.mkdir(parents=True, exist_ok=True)
     all_chunks, registry, fatwa_qa = [], [], []
@@ -171,8 +186,11 @@ def main(src_dir, out_dir):
         f = src_dir / fname
         if not f.exists(): print('MISSING', fname); continue
         paras, npages = extract(f)
-        if kind == 'fatwas': chunks, fatwa_qa = chunk_fatwas(paras)
+        if kind == 'fatwas':
+            chunks, fatwa_qa = chunk_fatwas(paras)
+            for q in fatwa_qa: q['question'], q['answer'] = post_clean(q['question']), post_clean(q['answer'])
         else: chunks = chunk_book(paras)
+        for c in chunks: c['text'] = post_clean(c['text'])
         def good(t):
             letters = sum(ch.isalpha() for ch in t)
             return len(t) >= 80 and letters / len(t) > 0.55 and t.count('.') / len(t) < 0.12
