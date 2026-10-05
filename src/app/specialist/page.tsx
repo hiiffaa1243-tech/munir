@@ -158,11 +158,11 @@ function Sources() {
 
   async function upload(file: File) {
     stopFlag.current = false; setLog('');
-    let pack: { sources?: any[]; chunks?: any[]; fatwas?: any[] };
+    let pack: { sources?: any[]; chunks?: any[]; fatwas?: any[]; replace_source?: string };
     try { pack = JSON.parse(await file.text()); } catch { setLog('الملف ليس بصيغة JSON صحيحة.'); return; }
     const sources = pack.sources ?? []; const chunks = pack.chunks ?? []; const fatwas = pack.fatwas ?? [];
     const batches: { body: any; n: number }[] = [];
-    if (sources.length) batches.push({ body: { sources }, n: sources.length });
+    if (sources.length) batches.push({ body: { sources, ...(pack.replace_source ? { replace_source: pack.replace_source } : {}) }, n: sources.length });
     for (let i = 0; i < chunks.length; i += 32) batches.push({ body: { chunks: chunks.slice(i, i + 32) }, n: Math.min(32, chunks.length - i) });
     for (let i = 0; i < fatwas.length; i += 6) batches.push({ body: { fatwas: fatwas.slice(i, i + 6) }, n: Math.min(6, fatwas.length - i) });
     const total = sources.length + chunks.length + fatwas.length; let done = 0; let failed = 0;
@@ -225,7 +225,7 @@ function SyncCard({ onDone }: { onDone: () => void }) {
   return (
     <div className="card">
       <b>المزامنة مع المراجع المعتمدة على الشبكة</b>
-      <p className="muted small" style={{ marginTop: 4 }}>الموسوعة الفقهية بموقع الدرر السنية (كتاب الحج): يقرأ منير صفحاتها من الموقع نفسه، ويحفظ مع كل مقطع رابط صفحته، ويعيد قراءتها يومياً ليلحق بأي تصحيح. خلاصات «سؤال وجواب» المنشورة فيها تدخل ذاكرة الإجابات بنصها.</p>
+      <p className="muted small" style={{ marginTop: 4 }}>الموسوعة الفقهية بموقع الدرر السنية (كتاب الحج): يقرأ منير صفحاتها من الموقع نفسه، ويحفظ مع كل مقطع رابط صفحته، ويعيد قراءتها يومياً ليلحق بأي تصحيح. إن رفض الموقع طلبات الخادم، تُستورد الصفحات حزمةً من «رفع حزمة مصادر» أعلاه بالصيغة نفسها.</p>
       {st && <><div className="prog"><i style={{ width: `${st.total ? Math.round(100 * st.done / st.total) : 0}%` }} /></div><div className="small muted">الصفحات المحفوظة: {st.done} من {st.total}</div></>}
       {msg && <div className="small" style={{ marginTop: 6 }}>{msg}</div>}
       <div className="rowbtns">

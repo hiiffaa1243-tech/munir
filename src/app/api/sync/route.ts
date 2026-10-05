@@ -84,7 +84,11 @@ async function run(req: Request) {
     }
     const remaining = mode === 'ingest' ? todo.length - processed.length : 0;
     return json({ ok: errors.length === 0, mode, total: ids.length, done: ids.length - remaining, remaining, processed, errors, ms: Date.now() - t0 });
-  } catch (e) { return json({ ok: false, error: String((e as Error).message).slice(0, 300) }, 502); }
+  } catch (e) {
+    const m = String((e as Error).message);
+    // Some references refuse requests that come from servers. That is their decision; the pages are then imported as a pack by the specialist.
+    return json({ ok: false, error: / 40[13]$/.test(m) ? 'المرجع يرفض حالياً طلبات الخوادم. استورد صفحاته حزمةً من «رفع حزمة مصادر».' : m.slice(0, 300), blocked: / 40[13]$/.test(m) }, 200);
+  }
 }
 
 export const GET = run;   // the daily schedule
