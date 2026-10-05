@@ -75,18 +75,24 @@ export function parsePage(id: number, html: string): DorarPage {
 
 export interface DorarChunk { id: string; source_id: string; path: string; page: number; lang: string; text: string }
 
-/** Chunks follow the encyclopedia's headings; a long section is cut at sentence ends, a short one joins its neighbour. */
-export function chunkPage(p: DorarPage, target = 1100, max = 1700): DorarChunk[] {
-  const out: { path: string; text: string }[] = [];
+/**
+ * Chunks follow the encyclopedia's headings. Short sub-sections under the same heading stay together
+ * (a ruling next to its evidence), each introduced by its own sub-heading; a long section is cut at sentence ends.
+ */
+export function chunkPage(p: DorarPage, target = 1100, max = 1500): DorarChunk[] {
+  const out: { key: string; text: string }[] = [];
   for (const s of p.sections) {
-    const path = [p.title, s.heading].filter(Boolean).join(' › ').slice(0, 190);
-    if (s.text.length <= max) { out.push({ path, text: s.text }); continue; }
-    const sents = s.text.split(/(?<=[.؛\n])\s*/); let buf = '';
-    for (const snt of sents) { if (buf && buf.length + snt.length > target) { out.push({ path, text: buf.trim() }); buf = ''; } buf += snt + ' '; }
-    if (buf.trim()) out.push({ path, text: buf.trim() });
+    const [h1, ...rest] = s.heading.split(' › '); const h2 = rest.join(' › ');
+    const key = [p.title, h1].filter(Boolean).join(' › ').slice(0, 190);
+    const pieces: string[] = [];
+    if (s.text.length <= max) pieces.push(s.text);
+    else { const sents = s.text.split(/(?<=[.؛\n])\s*/); let buf = ''; for (const snt of sents) { if (buf && buf.length + snt.length > target) { pieces.push(buf.trim()); buf = ''; } buf += snt + ' '; } if (buf.trim()) pieces.push(buf.trim()); }
+    for (const piece of pieces) {
+      const text = (h2 ? h2 + '\n' : '') + piece; const last = out[out.length - 1];
+      if (last && last.key === key && last.text.length + text.length <= max) last.text += '\n' + text;
+      else if (last && last.text.length < 300 && last.text.length + text.length <= max) last.text += '\n' + (h1 && last.key !== key ? h1 + '\n' : '') + text;
+      else out.push({ key, text });
+    }
   }
-  // Merge fragments too small to stand alone into the previous chunk of the same page.
-  const merged: { path: string; text: string }[] = [];
-  for (const c of out) { const last = merged[merged.length - 1]; if (last && c.text.length < 160 && last.text.length + c.text.length <= max) last.text += '\n' + c.text; else merged.push({ ...c }); }
-  return merged.filter(c => c.text.length >= 40).map((c, i) => ({ id: `${DORAR.sourceId}_${p.id}_${i}`, source_id: DORAR.sourceId, path: c.path, page: p.id, lang: 'ar', text: c.text.slice(0, 5900) }));
+  return out.filter(c => c.text.length >= 40).map((c, i) => ({ id: `${DORAR.sourceId}_${p.id}_${i}`, source_id: DORAR.sourceId, path: c.key, page: p.id, lang: 'ar', text: c.text.slice(0, 5900) }));
 }

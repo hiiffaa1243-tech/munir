@@ -209,7 +209,7 @@ function Sources() {
 function SyncCard({ onDone }: { onDone: () => void }) {
   const [st, setSt] = useState<{ total: number; done: number; remaining: number } | null>(null);
   const [running, setRunning] = useState(false); const [msg, setMsg] = useState(''); const stop = useRef(false);
-  const status = useCallback(async () => { const r = await api('/api/sync?status=1'); if (r.ok && r.d.total) setSt({ total: r.d.total, done: r.d.done, remaining: r.d.remaining }); else if (!r.ok) setMsg(r.d.error ?? 'تعذر الوصول إلى المرجع الآن.'); }, []);
+  const status = useCallback(async () => { const r = await api('/api/sync?status=1'); if (r.ok && r.d.total) setSt({ total: r.d.total, done: r.d.done, remaining: r.d.remaining }); else setMsg(r.d?.error ?? 'تعذر الوصول إلى المرجع الآن.'); }, []);
   useEffect(() => { status(); }, [status]);
   async function start() {
     stop.current = false; setRunning(true); setMsg('');
