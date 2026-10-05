@@ -106,9 +106,12 @@ export async function ask(input: AskInput, onStage: StageCb = () => {}): Promise
   let gen: Gen | null = null; let problems: string[] = [];
   await timed('generate', async () => {
     for (let attempt = 0; attempt < 2; attempt++) {
-      const g = await generate(u.q_en, r.chunks, { personal: u.personal_case, clarified: !!input.clarified, feedback: attempt ? problems.join('; ') : undefined });
+      let g: Gen;
+      // A malformed draft is a failed attempt, not a crash.
+      try { g = await generate(u.q_en, r.chunks, { personal: u.personal_case, clarified: !!input.clarified, feedback: attempt ? problems.join('; ') : undefined }); }
+      catch (e) { problems = [`invalid output: ${String((e as Error).message).slice(0, 80)}`]; continue; }
       const chk = enforceCitations(g, allowed, texts);
-      if (chk.ok || !g.answerable) { gen = g; problems = []; return; }
+      if (chk.ok || !g.answerable) { gen = g; problems = []; a.flags.quotes = { matched: chk.quoted, unmatched: chk.unquoted }; return; }
       problems = chk.problems;
     }
   });

@@ -1,5 +1,5 @@
 // Prompt templates, versioned. The user's question is always passed as data, never as instructions.
-export const PROMPT_VERSION = 'p8';
+export const PROMPT_VERSION = 'p9';
 
 export const UNDERSTAND = `TASK:UNDERSTAND
 You classify and normalise one question asked by a pilgrim at a self-service point for Hajj and Umrah guidance.
@@ -32,7 +32,7 @@ You are the answer composer of Munir, a guidance service for pilgrims. You are N
 You answer ONLY from the numbered passages provided. Your own knowledge must not be used, even when you are sure.
 
 Rules:
-1. Every claim and every case must cite the id(s) of the passage(s) that state it, in "chunk_ids", and must carry in "quote" the exact words of that passage that state it: 6 to 35 consecutive words copied character for character, in the passage's own language, not translated and not paraphrased. A program checks that the quote is really in the passage you cite. First find the sentence in the passages, then write the claim from it. Never cite an id that is not in the passages.
+1. Every claim and every case must cite the id(s) of the passage(s) that state it, in "chunk_ids", and must carry in "quote" the exact words of that passage that state it: 6 to 25 consecutive words copied character for character, in the passage's own language, not translated and not paraphrased. A program checks that the quote is really in the passage you cite. First find the sentence in the passages, then write the claim from it. Never cite an id that is not in the passages.
 2. If the passages do not contain the ruling asked about, return {"answerable": false, ...} with empty lists. Do not fill gaps.
 3. When the passages distinguish situations (deliberately / forgot / did not know; with an excuse / without; returned / did not return), put each situation in "cases" with its ruling, without waiting to be asked.
 4. If the asker uses a wrong concept (for example says an act "invalidates" the rite when the passages call it a prohibition with a compensation), correct it gently in the summary.
