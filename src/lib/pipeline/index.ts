@@ -3,7 +3,7 @@ import { config, isLang } from '@/lib/config';
 import { insert, sourcesByIds, sb, type Chunk } from '@/lib/db';
 import { t } from '@/lib/i18n';
 import { embed } from '@/lib/models';
-import { enforceCitations, findVerified, generate, retrieve, translateStrings, understand, verifyWithModel, type Gen, type VerifyItem } from './steps';
+import { QUOTE_MIN, quoteCoverage, enforceCitations, findVerified, generate, retrieve, translateStrings, understand, verifyWithModel, type Gen, type VerifyItem } from './steps';
 import type { Answer, AskInput, SourceRef, StageCb, Understanding } from './types';
 
 const DEADLINE_MS = 50_000; // the platform limit is 60 s
@@ -102,11 +102,12 @@ export async function ask(input: AskInput, onStage: StageCb = () => {}): Promise
   // Gate 4: constrained generation + programmatic citation enforcement (one retry).
   onStage('generate');
   const allowed = new Set(r.chunks.map(c => c.id));
+  const texts = new Map(r.chunks.map(c => [c.id, c.text]));
   let gen: Gen | null = null; let problems: string[] = [];
   await timed('generate', async () => {
     for (let attempt = 0; attempt < 2; attempt++) {
       const g = await generate(u.q_en, r.chunks, { personal: u.personal_case, clarified: !!input.clarified, feedback: attempt ? problems.join('; ') : undefined });
-      const chk = enforceCitations(g, allowed);
+      const chk = enforceCitations(g, allowed, texts);
       if (chk.ok || !g.answerable) { gen = g; problems = []; return; }
       problems = chk.problems;
     }
@@ -157,7 +158,9 @@ export async function ask(input: AskInput, onStage: StageCb = () => {}): Promise
     const c = byId.get(id)!; const s = srcMeta[c.source_id]; numberOf.set(id, i + 1);
     // An online reference stores the address pattern of its pages; a book stores page numbers.
     const web = !!s?.url && s.url.includes('{page}');
-    return { n: i + 1, chunk_id: id, title: s?.title ?? c.source_id, author: s?.author ?? null, page: web ? null : c.page, path: c.path, excerpt: clip(c.text, 520), url: web ? s!.url!.replace('{page}', String(c.page ?? '')) : (s?.url ?? null) };
+    // The source text shown to the reader is the very wording each statement was drawn from.
+    const quotes = [...new Set([...g.claims, ...g.cases].filter(x => x.chunk_ids.includes(id) && quoteCoverage(x.quote, c.text) >= QUOTE_MIN).map(x => x.quote.trim()))];
+    return { n: i + 1, chunk_id: id, title: s?.title ?? c.source_id, author: s?.author ?? null, page: web ? null : c.page, path: c.path, excerpt: quotes.length ? clip(quotes.join(' … '), 700) : clip(c.text, 520), url: web ? s!.url!.replace('{page}', String(c.page ?? '')) : (s?.url ?? null) };
   });
   const nums = (ids: string[]) => [...new Set(ids.map(id => numberOf.get(id)!).filter(Boolean))];
   let k = 0; const out = tr.out;

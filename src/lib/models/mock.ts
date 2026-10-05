@@ -11,7 +11,7 @@ export function mockJson(role: string, msgs: ChatMsg[]): unknown {
   if (sys.includes('TASK:EQUIVALENCE')) return { same_question: true, answers_it: true, reason: 'mock' };
   if (sys.includes('TASK:GENERATE')) {
     const id = (user.match(/\[([a-z0-9_-]+)\]/i) ?? [])[1] ?? 'c_1';
-    return { answerable: true, summary: 'Tawaf consists of seven rounds.', claims: [{ text: 'Tawaf consists of seven rounds around the Kaaba.', chunk_ids: [id] }], cases: [], action: 'Complete seven rounds.', disagreement_noted: false, clarify: null };
+    return { answerable: true, summary: 'Tawaf consists of seven rounds.', claims: [{ text: 'Tawaf consists of seven rounds around the Kaaba.', chunk_ids: [id], quote: 'Tawaf consists of seven rounds around the Kaaba' }], cases: [], action: 'Complete seven rounds.', disagreement_noted: false, clarify: null };
   }
   if (sys.includes('TASK:VERIFY')) {
     const n = (user.match(/"id":/g) ?? []).length || 1;

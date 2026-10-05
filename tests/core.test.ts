@@ -100,3 +100,16 @@ describe('tidy and legend', () => {
   it('rejoins an Arabic particle written with a tatweel', () => { expect(tidy('من كسب حلال لـ الحج والعمرة', 'ar')).toBe('من كسب حلال للحج والعمرة'); });
   it('tells the translator what a token stands for', () => { expect(legend(['T37', 'T37'], 'fr')).toBe('[[T37]] = Pierre noire'); });
 });
+
+import { quoteCoverage, enforceCitations as enforceQ, GenSchema as GS } from '@/lib/pipeline/steps';
+describe('quotation check', () => {
+  const passage = 'If the pilgrim forgets how many circuits he has performed, i.e. whether three or four, he should regard them as three (that is, the lesser of the two numbers). The same procedure applies to the Sa’y.';
+  it('accepts an exact quotation despite punctuation differences', () => expect(quoteCoverage("whether three or four he should regard them as three, that is the lesser of the two numbers", passage)).toBeGreaterThan(0.9));
+  it('rejects an invented quotation', () => expect(quoteCoverage('certainty is not removed by doubt, so he builds on what he is sure of', passage)).toBeLessThan(0.2));
+  it('matches Arabic regardless of diacritics', () => expect(quoteCoverage('يصح الاشتراط في الحج والعمرة وهذا مذهب الشافعية', 'يصحُّ الاشتراطُ في الحَجِّ والعُمْرَة، وهذا مَذْهَبُ الشَّافِعِيَّة، والحَنابِلَة')).toBeGreaterThan(0.9));
+  it('fails a claim whose quotation is not in the cited passage', () => {
+    const g = GS.parse({ answerable: true, claims: [{ text: 'x', chunk_ids: ['c1'], quote: 'this sentence does not appear anywhere in the source text' }] });
+    const r = enforceQ(g, new Set(['c1']), new Map([['c1', passage]]));
+    expect(r.ok).toBe(false); expect(r.problems[0]).toContain('quotation');
+  });
+});

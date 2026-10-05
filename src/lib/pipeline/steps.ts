@@ -99,26 +99,48 @@ const Str = z.preprocess(v => v ?? '', z.string());
 export const GenSchema = z.object({
   answerable: z.boolean(),
   summary: Str,
-  claims: z.preprocess(v => v ?? [], z.array(z.object({ text: z.string().min(1), chunk_ids: Ids }))),
-  cases: z.preprocess(v => v ?? [], z.array(z.object({ condition: z.string().min(1), ruling: z.string().min(1), chunk_ids: Ids }))),
+  claims: z.preprocess(v => v ?? [], z.array(z.object({ text: z.string().min(1), chunk_ids: Ids, quote: Str }))),
+  cases: z.preprocess(v => v ?? [], z.array(z.object({ condition: z.string().min(1), ruling: z.string().min(1), chunk_ids: Ids, quote: Str }))),
   action: Str,
   disagreement_noted: z.boolean().catch(false),
   clarify: z.preprocess(v => (typeof v === 'string' && v.trim() ? v : null), z.string().nullable()),
 });
 export type Gen = z.infer<typeof GenSchema>;
 
+// Words of a text for quote matching: lower-cased, without diacritics, punctuation or transliteration marks.
+const words = (t: string): string[] => t.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f\u064B-\u065F\u0670\u0640]/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim().split(' ').filter(Boolean);
+
+/**
+ * Does the quote really come from the passage? Compared as runs of three words, so a dropped comma or a
+ * different apostrophe does not matter but an invented sentence does. Returns the share of the quote found.
+ */
+export function quoteCoverage(quote: string, passage: string): number {
+  const q = words(quote); if (q.length < 3) return 0;
+  const p = words(passage); const grams = new Set<string>();
+  for (let i = 0; i + 2 < p.length; i++) grams.add(`${p[i]} ${p[i + 1]} ${p[i + 2]}`);
+  let hit = 0; const n = q.length - 2;
+  for (let i = 0; i < n; i++) if (grams.has(`${q[i]} ${q[i + 1]} ${q[i + 2]}`)) hit++;
+  return hit / n;
+}
+export const QUOTE_MIN = 0.7;
+
 /**
  * Citation enforcement, done in code and not by a model:
- * every claim and case must cite at least one id, and every cited id must be among the retrieved chunks.
+ * every claim and case must cite at least one retrieved passage, and must carry a quotation that is actually
+ * found in a passage it cites. A statement with no real quotation behind it does not pass.
  */
-export function enforceCitations(gen: Gen, allowedIds: Set<string>): { ok: boolean; problems: string[] } {
+export function enforceCitations(gen: Gen, allowedIds: Set<string>, texts?: Map<string, string>): { ok: boolean; problems: string[] } {
   const problems: string[] = [];
-  const check = (label: string, ids: string[]) => {
+  const check = (label: string, ids: string[], quote: string) => {
     if (!ids.length) problems.push(`${label}: no citation`);
     for (const id of ids) if (!allowedIds.has(id)) problems.push(`${label}: unknown passage ${id}`);
+    if (texts && ids.length && ids.every(id => allowedIds.has(id))) {
+      if (words(quote).length < 4) problems.push(`${label}: no quotation from the cited passage`);
+      else if (Math.max(...ids.map(id => quoteCoverage(quote, texts.get(id) ?? ''))) < QUOTE_MIN) problems.push(`${label}: the quotation is not found in the cited passage; copy the words exactly from the passage you cite`);
+    }
   };
-  gen.claims.forEach((c, i) => check(`claim ${i}`, c.chunk_ids));
-  gen.cases.forEach((c, i) => check(`case ${i}`, c.chunk_ids));
+  gen.claims.forEach((c, i) => check(`claim ${i}`, c.chunk_ids, c.quote));
+  gen.cases.forEach((c, i) => check(`case ${i}`, c.chunk_ids, c.quote));
   if (gen.answerable && !gen.clarify && gen.claims.length + gen.cases.length === 0) problems.push('answerable but no claims');
   return { ok: problems.length === 0, problems };
 }
