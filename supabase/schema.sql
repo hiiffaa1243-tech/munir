@@ -158,12 +158,17 @@ language sql stable as $$
   limit k;
 $$;
 
+-- Keyword search. Terms are OR-ed (a long natural question rarely contains every term of the passage)
+-- and ranked by cover density, so passages matching more of the question come first.
 create or replace function search_chunks(q text, k int)
 returns table (id text, source_id text, path text, page int, text text, rank float)
 language sql stable as $$
-  select c.id, c.source_id, c.path, c.page, c.text, ts_rank(c.tsv, websearch_to_tsquery('english', q))::float as rank
-  from chunks c join sources s on s.id = c.source_id
-  where s.active and c.tsv @@ websearch_to_tsquery('english', q)
+  with query as (
+    select nullif(replace(plainto_tsquery('english', q)::text, '&', '|'), '')::tsquery as tsq
+  )
+  select c.id, c.source_id, c.path, c.page, c.text, ts_rank_cd(c.tsv, query.tsq)::float as rank
+  from chunks c join sources s on s.id = c.source_id, query
+  where s.active and query.tsq is not null and c.tsv @@ query.tsq
   order by rank desc
   limit k;
 $$;
