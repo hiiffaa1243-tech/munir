@@ -78,3 +78,17 @@ describe('notebook tokens', () => {
   it('stores only a hash of the notebook key', () => { const k = newNotebookKey(); expect(validKey(k)).toBe(true); expect(hashKey(k)).toMatch(/^[0-9a-f]{64}$/); expect(hashKey(k)).not.toContain(k); });
   it('validates the specialist cookie', () => { const c = makeSpecialistCookie(1000, 5000); expect(checkSpecialistCookie(c, 5500)).toBe(true); expect(checkSpecialistCookie(c, 7000)).toBe(false); expect(checkSpecialistCookie('1.x', 0)).toBe(false); });
 });
+
+import { unmask as unmaskAr } from '@/lib/glossary/mask';
+describe('arabic joins and glosses', () => {
+  it('does not double the article or gloss for Arabic readers', () => {
+    const seen = new Set<string>();
+    expect(unmaskAr('في [[T05]] ول[[T05]] وال[[T05]] ب[[T05]]', 'ar', seen)).toBe('في الإحرام وللإحرام والإحرام بالإحرام');
+  });
+  it('adds one gloss in other languages, never inside brackets', () => {
+    const seen = new Set<string>();
+    const out = unmaskAr('expiation ([[T15]]) then [[T15]]', 'fr', seen);
+    expect(out).toBe('expiation (fidya) then fidya');
+    expect(unmaskAr('[[T05]] puis [[T05]]', 'fr', new Set())).toMatch(/^ihram \(.+\) puis ihram$/);
+  });
+});

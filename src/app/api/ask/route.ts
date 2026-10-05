@@ -37,7 +37,10 @@ export async function POST(req: Request) {
       try {
         const result = await ask({ text: body.text, langHint: body.lang, sessionId: body.session_id, kiosk: body.kiosk, clarified: body.clarified, notebookId }, stage => send({ stage }));
         // Internal diagnostics stay on the server.
-        send({ result: { ...result, flags: {}, timings: {} } });
+        // Only the facts a visitor may see travel to the browser: which model checked the answer and how long it took.
+        const f = result.flags as Record<string, any>;
+        const flags = { verify: f.verify ? { checked: f.verify.checked, model: f.verify.model, independent: f.verify.independent } : undefined, refer_reason: f.refer_reason };
+        send({ result: { ...result, flags, timings: { total: result.timings.total } } });
       } catch (e) {
         console.error('ask failed', e);
         send({ error: 'pipeline_error' });

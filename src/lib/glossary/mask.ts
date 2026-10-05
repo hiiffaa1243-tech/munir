@@ -34,13 +34,21 @@ export const countTokens = (text: string): string[] => { const ids: string[] = [
 
 /** Restore tokens with the approved rendering. `seen` tracks first mentions so the gloss is added once per answer. */
 export function unmask(text: string, lang: string, seen: Set<string>): string {
-  return text.replace(TOKEN_RE, (_m, id: string) => {
-    const t = BY_ID.get(id); if (!t) return _m;
-    const base = (t as any)[lang] as string | undefined ?? t.en;
-    const gloss = (t.gloss as any)?.[lang] as string | undefined;
-    if (gloss && !seen.has(id)) { seen.add(id); return `${base} (${gloss})`; }
-    seen.add(id);
-    return base;
+  return text.replace(TOKEN_RE, (m: string, id: string, offset: number, whole: string) => {
+    const t = BY_ID.get(id); if (!t) return m;
+    let base = (t as any)[lang] as string | undefined ?? t.en;
+    const before = whole.slice(0, offset); const after = whole.slice(offset + m.length);
+    if (lang === 'ar') {
+      // Arabic joins particles to the word: "ال" must not be doubled, and "لـ" + "الـ" is written "للـ".
+      if (/ال$/.test(before)) base = base.replace(/^ال/, '');
+      else if (/(^|[\s(«"])[وف]?ل$/.test(before) && base.startsWith('ال')) base = base.slice(1);
+    }
+    // A short explanation follows the first mention, except for Arabic readers (the term is their own word)
+    // and where the sentence already brackets the term.
+    const gloss = lang === 'ar' ? undefined : (t.gloss as any)?.[lang] as string | undefined;
+    const bracketed = /[(（]\s*$/.test(before) || /^\s*[)）(（]/.test(after);
+    const first = !seen.has(id); seen.add(id);
+    return gloss && first && !bracketed ? `${base} (${gloss})` : base;
   });
 }
 

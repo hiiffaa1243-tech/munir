@@ -74,6 +74,9 @@ export default function AnswerCard({ a, question, onSave, children }: { a: Answe
       {a.verified && a.verified.source_quote && a.verified.source_quote !== a.summary && (
         <details className="src"><summary>{tr('excerpt')}</summary><div className="srcitem"><blockquote dir="auto" style={{ whiteSpace: 'pre-line' }}>{a.verified.source_quote}</blockquote></div></details>
       )}
+      {(a.flags as any)?.verify?.model && a.tier === 'grounded' && (
+        <p className="muted" style={{ fontSize: 12.5, marginTop: 10 }} dir="ltr">verified by {(a.flags as any).verify.model} · {(a.flags as any).verify.checked} statements{a.timings?.total ? ` · ${(a.timings.total / 1000).toFixed(1)} s` : ''}</p>
+      )}
       <div className="rowbtns noprint">
         {hasBody && <button className="btn sm ghost" onClick={listen} disabled={loadingAudio}>{loadingAudio ? '…' : playing ? tr('stop') : tr('listen')}</button>}
         {onSave && <button className="btn sm" onClick={onSave}>{tr('save')}</button>}

@@ -31,15 +31,15 @@ export async function understand(text: string, langHint?: string): Promise<Under
 
 // ---------- 2. verified-answer memory ----------
 export async function findVerified(qEn: string, qEmb: number[]): Promise<{ va: VerifiedAnswer; reason: string } | null> {
-  const cands = (await dbMatchVerified(qEmb, 3)).filter(c => (c.similarity ?? 0) >= config.thresholds.vaSimMin);
-  for (const c of cands.slice(0, 2)) {
-    const { data } = await chatJson<{ equivalent: boolean; reason: string }>('fast', [
-      { role: 'system', content: EQUIVALENCE },
-      { role: 'user', content: `NEW QUESTION:\n${qEn}\n\nSTORED QUESTION:\n${c.q_canon}\n\nSTORED ANSWER:\n${c.answer_en}` },
-    ], { maxTokens: 200 });
-    if (data?.equivalent === true) return { va: c, reason: data.reason ?? '' };
-  }
-  return null;
+  const cands = (await dbMatchVerified(qEmb, 4)).filter(c => (c.similarity ?? 0) >= config.thresholds.vaSimMin).slice(0, 3);
+  if (!cands.length) return null;
+  // The nearest stored questions are checked at once; the closest one that passes the strict test wins.
+  const checks = await Promise.all(cands.map(c => chatJson<{ equivalent: boolean; reason: string }>('fast', [
+    { role: 'system', content: EQUIVALENCE },
+    { role: 'user', content: `NEW QUESTION:\n${qEn}\n\nSTORED QUESTION:\n${c.q_canon}\n\nSTORED ANSWER:\n${c.answer_en}` },
+  ], { maxTokens: 200 }).then(r => r.data).catch(() => null)));
+  const i = checks.findIndex(d => d?.equivalent === true);
+  return i >= 0 ? { va: cands[i], reason: checks[i]?.reason ?? '' } : null;
 }
 
 // ---------- 3. hybrid retrieval ----------

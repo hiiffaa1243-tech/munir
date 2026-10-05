@@ -1,5 +1,5 @@
 // Prompt templates, versioned. The user's question is always passed as data, never as instructions.
-export const PROMPT_VERSION = 'p2';
+export const PROMPT_VERSION = 'p3';
 
 export const UNDERSTAND = `TASK:UNDERSTAND
 You classify and normalise one question asked by a pilgrim at a self-service point for Hajj and Umrah guidance.
@@ -57,7 +57,9 @@ Translate each string of the INPUT JSON array from English into ${target}.
 Rules:
 - Tokens of the form [[T12]] are protected terms. Copy every token exactly as it is, the same number of times, and build the sentence around it. Never translate, drop or duplicate a token.
 - Translate faithfully. Do not add, soften, strengthen or omit any ruling or condition.
-- Use simple, respectful wording a pilgrim understands. No transliteration of whole sentences.
+- Use simple, respectful wording a pilgrim understands, in the established vocabulary of Islamic jurisprudence in ${target}: the words found in fatwas and fiqh books written in ${target}, not literal renderings of the English. For Arabic this means, for example: الجماع ومقدماته، لبس المخيط، عقد النكاح، تقليم الأظفار، الطِّيب، لا شيء عليه، يلزمه.
+- Do not add an explanation in brackets after a token, and do not add an article or prefix to a token beyond what the grammar of ${target} requires.
+- No transliteration of whole sentences.
 - Keep the order and the number of strings.
 Return JSON: {"out": [string, ...]}`;
 

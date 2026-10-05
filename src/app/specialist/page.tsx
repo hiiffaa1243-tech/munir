@@ -242,13 +242,14 @@ function Glossary() {
   const rows = GLOSSARY.filter(g => !q || `${g.en} ${g.ar} ${g.ur} ${g.id} ${g.fr}`.toLowerCase().includes(q.toLowerCase()));
   return (
     <section>
-      <p className="lead">المصطلحات الشرعية لا تمر على الترجمة الآلية الحرة: تُحجب قبل الترجمة ثم تُستعاد من هذا الجدول، ويُفحص الناتج آلياً. الإصدار <b dir="ltr">{GLOSSARY_VERSION}</b>، وعدد المصطلحات {GLOSSARY.length}.</p>
+      <p className="lead">المصطلحات الشرعية لا تمر على الترجمة الآلية الحرة: تُحجب قبل الترجمة ثم تُستعاد من هذا الجدول، ويُفحص الناتج آلياً. الإصدار <b dir="ltr">{GLOSSARY_VERSION}</b>، وعدد المصطلحات {GLOSSARY.length}، منها {GLOSSARY.filter(g => g.jamhara).length} روجعت على معجم المصطلحات الشرعية المعتمد (الجمهرة)، و{GLOSSARY.filter(g => g.reviewed).length} تطابقت معه في لغة غير الإنجليزية.</p>
       <input className="in" style={{ margin: '12px 0' }} placeholder="بحث" value={q} onChange={e => setQ(e.target.value)} dir="auto" />
       <div className="tablewrap"><table className="t">
-        <thead><tr><th>المعرّف</th><th>English</th><th>العربية</th><th>اردو</th><th>Indonesia</th><th>Français</th><th>صيغ ممنوعة</th></tr></thead>
+        <thead><tr><th>المعرّف</th><th>English</th><th>العربية</th><th>اردو</th><th>Indonesia</th><th>Français</th><th>صيغ ممنوعة</th><th>المعجم المعتمد</th></tr></thead>
         <tbody>{rows.map(g => (
           <tr key={g.tid}><td dir="ltr">{g.tid}</td><td dir="ltr">{g.en}</td><td>{g.ar}</td><td>{g.ur}</td><td dir="ltr">{g.id}</td><td dir="ltr">{g.fr}</td>
-            <td className="small" dir="auto">{g.forbid ? Object.entries(g.forbid).map(([l, ws]) => `${l}: ${(ws as string[]).join('، ')}`).join(' | ') : '—'}</td></tr>
+            <td className="small" dir="auto">{g.forbid ? Object.entries(g.forbid).map(([l, ws]) => `${l}: ${(ws as string[]).join('، ')}`).join(' | ') : '—'}</td>
+            <td className="small">{g.jamhara ? <a href={`https://islamic-content.com/dictionary/word/${g.jamhara}`} target="_blank" rel="noopener noreferrer">{g.checked?.length ? `مطابق: ${g.checked.join('، ')}` : 'مدخل عام'}</a> : '—'}</td></tr>
         ))}</tbody>
       </table></div>
     </section>
