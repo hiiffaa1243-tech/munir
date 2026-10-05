@@ -1,7 +1,7 @@
 import { bad as badReq, clientIp, json, rateLimit } from '@/lib/http';
 import { config, secretIsStrong } from '@/lib/config';
 import { sb } from '@/lib/db';
-import { chatJson, embed, type Role } from '@/lib/models';
+import { chatJson, embed, probeModel, type Role } from '@/lib/models';
 import { GLOSSARY, GLOSSARY_VERSION } from '@/lib/glossary/data';
 
 export const runtime = 'nodejs';
@@ -11,6 +11,14 @@ export const maxDuration = 60;
 export async function GET(req: Request) {
   const deep = new URL(req.url).searchParams.get('deep') === '1';
   if (deep && !rateLimit(`health:${clientIp(req)}`, 6)) return badReq('too many requests', 429);
+  // ?probe=google:model-a,openai:model-b[&level=minimal] times candidate verifier models on a small entailment check.
+  const sp = new URL(req.url).searchParams; const probe = sp.get('probe');
+  if (probe) {
+    if (!rateLimit(`probe:${clientIp(req)}`, 4)) return badReq('too many requests', 429);
+    const specs = probe.split(',').slice(0, 4).map(s => s.split(':')).filter(([p, m]) => (p === 'google' || p === 'openai') && /^(gemini|gpt|o\d)[\w.\-]{2,40}$/.test(m ?? ''));
+    const results = await Promise.all(specs.map(([p, m]) => probeModel(p as 'google' | 'openai', m, sp.get('level') ?? undefined).catch(e => ({ model: `${p}/${m}`, error: String((e as Error).message).slice(0, 240) }))));
+    return json({ probe: results });
+  }
   const out: any = {
     ok: true, time: new Date().toISOString(), mock: config.mock,
     roles: Object.fromEntries(Object.entries(config.roles).map(([k, v]) => [k, `${v.provider}/${v.model}`])),

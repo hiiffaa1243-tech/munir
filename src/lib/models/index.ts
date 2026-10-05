@@ -48,26 +48,26 @@ async function chatOpenAI(rc: RoleConfig, msgs: ChatMsg[], json: boolean, maxTok
 }
 
 const noThinkCfg = new Set<string>();
-async function chatGoogle(rc: RoleConfig, msgs: ChatMsg[], json: boolean, maxTokens: number): Promise<{ text: string; in?: number; out?: number }> {
+async function chatGoogle(rc: RoleConfig, msgs: ChatMsg[], json: boolean, maxTokens: number, level: string = config.geminiThinking): Promise<{ text: string; in?: number; out?: number; thoughts?: number }> {
   const sys = msgs.filter(m => m.role === 'system').map(m => m.content).join('\n\n');
   const user = msgs.filter(m => m.role === 'user').map(m => m.content).join('\n\n');
   // Gemini 3 reasons before answering: it keeps its default temperature and is asked for light reasoning,
   // with headroom in the output budget so the JSON is never cut short.
-  const g3 = /^gemini-3/.test(rc.model); const think = g3 && !noThinkCfg.has(rc.model);
+  const g3 = /^gemini-3/.test(rc.model); const think = g3 && level !== 'default' && !noThinkCfg.has(rc.model);
   const body: any = {
     contents: [{ role: 'user', parts: [{ text: user }] }],
-    generationConfig: { ...(g3 ? {} : { temperature: 0 }), maxOutputTokens: maxTokens + 6000, ...(json ? { responseMimeType: 'application/json' } : {}), ...(think ? { thinkingConfig: { thinkingLevel: 'low' } } : {}) },
+    generationConfig: { ...(g3 ? {} : { temperature: 0 }), maxOutputTokens: maxTokens + 6000, ...(json ? { responseMimeType: 'application/json' } : {}), ...(think ? { thinkingConfig: { thinkingLevel: level } } : {}) },
   };
   if (sys) body.systemInstruction = { parts: [{ text: sys }] };
   let d: any;
   try {
     d = await post(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(rc.model)}:generateContent`, { 'x-goog-api-key': config.keys.google }, body, 'google');
   } catch (e) {
-    if (think && e instanceof ModelError && e.status === 400 && /thinking/i.test(e.message)) { noThinkCfg.add(rc.model); return chatGoogle(rc, msgs, json, maxTokens); }
+    if (think && e instanceof ModelError && e.status === 400 && /thinking/i.test(e.message)) { noThinkCfg.add(rc.model); return chatGoogle(rc, msgs, json, maxTokens, level); }
     throw e;
   }
   const text = (d.candidates?.[0]?.content?.parts ?? []).map((p: any) => p.text ?? '').join('');
-  return { text, in: d.usageMetadata?.promptTokenCount, out: d.usageMetadata?.candidatesTokenCount };
+  return { text, in: d.usageMetadata?.promptTokenCount, out: d.usageMetadata?.candidatesTokenCount, thoughts: d.usageMetadata?.thoughtsTokenCount };
 }
 
 async function chatAnthropic(rc: RoleConfig, msgs: ChatMsg[], json: boolean, maxTokens: number) {
@@ -181,4 +181,16 @@ export async function speak(text: string, lang: string): Promise<ArrayBuffer> {
   const r = await fetch('https://api.openai.com/v1/audio/speech', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${config.keys.openai}` }, body: JSON.stringify(body), signal: AbortSignal.timeout(40_000) });
   if (!r.ok) throw new ModelError('openai', r.status, `tts ${r.status}: ${(await r.text()).slice(0, 300)}`);
   return r.arrayBuffer();
+}
+
+/** Diagnostic: time one model on a small, realistic entailment check. Used to choose the verifier. */
+export async function probeModel(provider: 'openai' | 'google', model: string, level?: string) {
+  const msgs: ChatMsg[] = [
+    { role: 'system', content: 'You are an independent checker. For each statement decide whether the passage SUPPORTS it. Return JSON: {"results": [{"id": number, "verdict": "supported" | "contradicted" | "insufficient"}]}' },
+    { role: 'user', content: 'PASSAGE: Tawaf consists of seven rounds around the Kaaba, starting at the Black Stone. Whoever doubts the number of rounds builds on the lower number.\nSTATEMENTS: [{"id":0,"statement":"Tawaf is seven rounds."},{"id":1,"statement":"Tawaf must be performed barefoot."},{"id":2,"statement":"If unsure between six and seven rounds, count it as six."}]' },
+  ];
+  const t0 = Date.now(); const rc = { provider, model } as RoleConfig;
+  const r = provider === 'google' ? await chatGoogle(rc, msgs, true, 300, level ?? config.geminiThinking) : await chatOpenAI(rc, msgs, true, 300);
+  let verdicts: unknown = null; try { verdicts = ((extractJson(r.text) as any).results ?? []).map((x: any) => x.verdict); } catch { /* reported as raw */ }
+  return { model: `${provider}/${model}`, ms: Date.now() - t0, verdicts, expected: ['supported', 'insufficient', 'supported'], tokens: { in: r.in, out: r.out, thoughts: (r as any).thoughts }, level: provider === 'google' ? (level ?? config.geminiThinking) : undefined, thinking_cfg_rejected: noThinkCfg.has(model) };
 }

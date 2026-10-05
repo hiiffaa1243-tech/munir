@@ -24,6 +24,7 @@ export const config = {
   } satisfies Record<string, RoleConfig>,
   // Used only when the verifier's provider cannot be reached. Recorded on every answer it touches. Set VERIFY_FALLBACK=off to fail closed instead.
   verifyFallback: env('VERIFY_FALLBACK') === 'off' ? null : ({ provider: env('VERIFY_FALLBACK_PROVIDER', 'openai') as Provider, model: env('VERIFY_FALLBACK_MODEL', 'gpt-4.1-mini') } as RoleConfig),
+  geminiThinking: env('GEMINI_THINKING', 'low'),   // thinking level sent to Gemini 3 models; 'default' sends none
   embedModel: env('EMBED_MODEL', 'text-embedding-3-small'),
   embedDim: 1536,
   sttModel: env('STT_MODEL', 'whisper-1'),
