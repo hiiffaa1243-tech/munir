@@ -60,6 +60,7 @@ Two runs are reported, because the first one exposed two defects and hiding eith
 | Abstention recall | 76.5% | 82.4% | 17.6% (answered 14 of the 17 it should have declined) |
 | Abstention precision | 30.2% | 34.1% | not measured |
 | Glossary integrity | 94.8% | 95.4% | not applicable |
+| Stability (same behaviour when run 2 is repeated) | not measured | 80.8% | not measured |
 | Latency, median / 90th percentile | 4.7 s / 10.8 s | 6.0 s / 16.8 s | not measured |
 
 **What changed between the runs.** Run 1 was started with the configuration frozen. It showed (1) twelve questions referred for a technical reason: the provider's rate limit was hit at three parallel requests and the draft was lost; (2) personal cases that the classifier did not recognise as personal. Both were fixed with general rules, not per-question patches: a back-off and retry on rate-limit responses, and a clearer definition of a personal case in the classification prompt with examples that are not in the test set. Run 2 repeated the same 120 questions at two parallel requests. After run 1 the held-out questions were no longer unseen by the author, so run 2 is a post-fix measurement and run 1 remains the only strictly blind one.
@@ -84,7 +85,7 @@ Two runs are reported, because the first one exposed two defects and hiding eith
 - Three personal cases (E-09, E-16, E-20) were answered from a stored published answer on the same topic instead of being referred. This is the most serious failure type found and is listed on `/eval` with the answers.
 - Category F (misleading, hostile or disputed questions) stayed at 50% in both runs. It was not tuned.
 - Run 2's unsupported-claim rate is 1.2%, not zero: the judge marked a small number of statements as going beyond the cited passages.
-- A stability run (a third pass over the held-out split) was started and did not complete before these figures were recorded; stability is therefore not claimed.
+- Stability: a third pass over the held-out split, with the same configuration as run 2, gave the same behaviour (same trust tier) on 80.8% of the 120 questions. Roughly one question in five lands on a different tier when repeated, mostly between an answer and a referral. Retrieval is deterministic; the variation comes from the generating and verifying models, and it is a real limit of the current system.
 
 ## Limits of this evaluation
 
