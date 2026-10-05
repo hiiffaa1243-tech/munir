@@ -7,6 +7,9 @@ export interface RoleConfig { provider: Provider; model: string }
 const env = (k: string, d = '') => (process.env[k] ?? d).trim();
 const num = (k: string, d: number) => { const v = Number(env(k)); return Number.isFinite(v) && env(k) !== '' ? v : d; };
 
+// The dashboard shows the project URL with or without a path (…/rest/v1/); only the origin is wanted.
+const originOf = (u: string) => { if (!u) return ''; try { return new URL(/^https?:\/\//.test(u) ? u : `https://${u}`).origin; } catch { return u; } };
+
 export const config = {
   mock: env('MUNIR_MOCK') === '1',
   roles: {
@@ -31,7 +34,7 @@ export const config = {
     google: env('GOOGLE_API_KEY'),
     anthropic: env('ANTHROPIC_API_KEY'),
   },
-  supabaseUrl: env('SUPABASE_URL'),
+  supabaseUrl: originOf(env('SUPABASE_URL')),
   supabaseServiceKey: env('SUPABASE_SERVICE_ROLE_KEY'),
   appSecret: env('APP_SECRET', 'dev-only-secret-change-me'),
   specialistPasscode: env('SPECIALIST_PASSCODE'),
