@@ -96,7 +96,8 @@ const isTransient = (e: unknown) => !(e instanceof ModelError) || e.status === 4
 async function callRole(role: Role, rcBase: RoleConfig, msgs: ChatMsg[], json: boolean, maxTokens: number, parse: boolean) {
   const key = `${rcBase.provider}:${rcBase.model}`;
   const all = rcBase.model.split(',').map(m => m.trim()).filter(Boolean);
-  const models = chosen.has(key) ? [chosen.get(key)!] : all;
+  const first = chosen.get(key);
+  const models = first ? [first, ...all.filter(m => m !== first)] : all;
   let lastErr: unknown;
   for (const model of models) {
     const rc = { provider: rcBase.provider, model };
@@ -110,11 +111,12 @@ async function callRole(role: Role, rcBase: RoleConfig, msgs: ChatMsg[], json: b
         lastErr = e;
         if (isModelMissing(e)) { chosen.delete(key); break; }   // try the next candidate
         if (e instanceof ModelError && !isTransient(e)) throw e;
-        if ((e as Error)?.name === 'AbortError') throw new ModelError(rc.provider, 504, `${rc.provider} timed out`); // no second wait on a timeout
+        if ((e as Error)?.name === 'AbortError') { lastErr = new ModelError(rc.provider, 504, `${rc.provider} timed out`); break; } // no second wait on a timeout
+        // An overloaded or rate-limited model: with other candidates listed, move on at once instead of waiting on it.
+        if (models.length > 1) { chosen.delete(key); break; }
         if (attempt < 1) await sleep(800);
       }
     }
-    if (!isModelMissing(lastErr)) break;
   }
   throw lastErr;
 }

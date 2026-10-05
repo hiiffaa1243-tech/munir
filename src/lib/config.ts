@@ -18,7 +18,7 @@ export const config = {
     // gen: constrained answer generation
     gen: { provider: env('GEN_PROVIDER', 'openai') as Provider, model: env('GEN_MODEL', 'gpt-4.1') },
     // verify: entailment check. MUST be a different provider than gen (uncorrelated errors).
-    verify: { provider: env('VERIFY_PROVIDER', 'google') as Provider, model: env('VERIFY_MODEL', 'gemini-3.8-flash,gemini-3.5-flash,gemini-2.5-flash') },
+    verify: { provider: env('VERIFY_PROVIDER', 'google') as Provider, model: env('VERIFY_MODEL', 'gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-3.8-flash') },
     // baseline: a general model answering closed-book, used only in evaluation
     baseline: { provider: env('BASELINE_PROVIDER', 'openai') as Provider, model: env('BASELINE_MODEL', 'gpt-4.1') },
   } satisfies Record<string, RoleConfig>,
