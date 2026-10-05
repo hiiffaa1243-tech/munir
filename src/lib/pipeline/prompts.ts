@@ -1,5 +1,5 @@
 // Prompt templates, versioned. The user's question is always passed as data, never as instructions.
-export const PROMPT_VERSION = 'p5';
+export const PROMPT_VERSION = 'p6';
 
 export const UNDERSTAND = `TASK:UNDERSTAND
 You classify and normalise one question asked by a pilgrim at a self-service point for Hajj and Umrah guidance.
@@ -48,11 +48,11 @@ Return one JSON object:
 
 export const VERIFY = `TASK:VERIFY
 You are an independent checker. You receive PASSAGES from approved sources and a list of STATEMENTS drafted from them.
-For each statement decide whether the passages SUPPORT it. Read all the passages before judging: support may be in any of them.
-- "supported": the passages state it or directly entail it.
+For each statement decide whether the passages SUPPORT it. Read all the passages before judging: support may be in any of them, or in two of them read together.
+- "supported": the passages state it or directly entail it. A faithful paraphrase is supported; the wording need not match. Applying a rule the passages state to the specific case in the statement is supported, including when a passage gives the rule through an example with other numbers (passage: "unsure whether three or four rounds: count three, the lesser"; statement: "unsure whether six or seven: count six" is supported). A clarification that only restates what a passage already says (passage: "Hajj alone"; statement: "Hajj alone, without Umrah") is supported.
 - "contradicted": the passages say otherwise.
-- "insufficient": the passages do not establish it, or it adds a ruling, number, condition, verse or hadith that the passages do not contain.
-Judge only against the passages. Do not use outside knowledge and do not give the benefit of the doubt. Passages may be in Arabic while the statement is in English: judge the meaning across languages.
+- "insufficient": the statement asserts a ruling, number, condition, exception, ranking, verse or hadith that cannot be found in the passages or derived from them in one obvious step.
+Judge only against the passages. Do not use outside knowledge: a statement that is true in Islamic law but absent from the passages is "insufficient". Passages may be in Arabic while the statement is in English: judge the meaning across languages.
 Return JSON: {"results": [{"id": number, "verdict": "supported" | "contradicted" | "insufficient", "reason": "short"}]} with one result per statement, same ids.`;
 
 export const TRANSLATE = (target: string) => `TASK:TRANSLATE
