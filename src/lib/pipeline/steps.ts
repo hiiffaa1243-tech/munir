@@ -105,16 +105,18 @@ export async function generate(qEn: string, chunks: Chunk[], opts: { personal: b
 export interface VerifyItem { id: number; statement: string; passages: string[] }
 export interface VerifyResult { id: number; verdict: 'supported' | 'contradicted' | 'insufficient'; reason: string }
 
-export async function verify(items: VerifyItem[]): Promise<VerifyResult[]> {
-  if (!items.length) return [];
-  const { data } = await chatJson<{ results: VerifyResult[] }>('verify', [
+export async function verifyWithModel(items: VerifyItem[]): Promise<{ results: VerifyResult[]; model: string; fallback: boolean }> {
+  if (!items.length) return { results: [], model: '', fallback: false };
+  const { data, usage } = await chatJson<{ results: VerifyResult[] }>('verify', [
     { role: 'system', content: VERIFY },
     { role: 'user', content: `STATEMENTS:\n${JSON.stringify(items.map(i => ({ id: i.id, statement: i.statement, passages: i.passages })), null, 1)}` },
   ], { maxTokens: 1200 });
   const got = new Map((data?.results ?? []).map(r => [Number(r.id), r]));
   // A statement the checker did not return a verdict for is treated as unverified (fail-closed).
-  return items.map(i => got.get(i.id) ?? { id: i.id, verdict: 'insufficient' as const, reason: 'no verdict returned' });
+  const results = items.map(i => got.get(i.id) ?? { id: i.id, verdict: 'insufficient' as const, reason: 'no verdict returned' });
+  return { results, model: `${usage.provider}/${usage.model}`, fallback: !!usage.fallback };
 }
+export async function verify(items: VerifyItem[]): Promise<VerifyResult[]> { return (await verifyWithModel(items)).results; }
 
 // ---------- 6. constrained translation ----------
 export interface Translated { out: string[]; approx: boolean; report: { missing: string[]; forbidden: string[] } }
@@ -129,7 +131,7 @@ export async function translateStrings(strings: string[], lang: string): Promise
     const { data } = await chatJson<{ out: string[] }>('fast', [
       { role: 'system', content: TRANSLATE(target) },
       { role: 'user', content: `${attempt ? 'Your previous translation changed or lost protected tokens. Copy every [[T..]] token exactly.\n' : ''}INPUT:\n${JSON.stringify(masked)}` },
-    ], { maxTokens: 2000 });
+    ], { maxTokens: 3500 });
     const tr = Array.isArray(data?.out) ? data.out.map(String) : [];
     if (tr.length !== masked.length) continue;
     const seen = new Set<string>();

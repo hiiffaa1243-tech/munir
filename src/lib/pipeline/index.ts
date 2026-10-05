@@ -2,7 +2,7 @@
 import { config, isLang } from '@/lib/config';
 import { insert, sourcesByIds, sb, type Chunk } from '@/lib/db';
 import { t } from '@/lib/i18n';
-import { embedOne, enforceCitations, findVerified, generate, retrieve, translateStrings, understand, verify, type Gen, type VerifyItem } from './steps';
+import { embedOne, enforceCitations, findVerified, generate, retrieve, translateStrings, understand, verifyWithModel, type Gen, type VerifyItem } from './steps';
 import type { Answer, AskInput, SourceRef, StageCb, Understanding } from './types';
 
 const clip = (s: string, n: number) => (s.length > n ? s.slice(0, n).replace(/\s+\S*$/, '') + '…' : s);
@@ -109,12 +109,13 @@ export async function ask(input: AskInput, onStage: StageCb = () => {}): Promise
   if (g.summary.trim()) items.push({ id: items.length, statement: g.summary, passages: passagesOf(usedIds) });
 
   const strings = [g.summary, g.action, ...g.claims.map(c => c.text), ...g.cases.flatMap(c => [c.condition, c.ruling])];
-  const [verdicts, tr] = await Promise.all([
-    timed('verify', () => verify(items)),
+  const [vr, tr] = await Promise.all([
+    timed('verify', () => verifyWithModel(items)),
     timed('translate', () => translateStrings(strings, outLang)),
   ]);
+  const verdicts = vr.results;
   const failed = verdicts.filter(v => v.verdict !== 'supported');
-  a.flags.verify = { checked: verdicts.length, failed: failed.length, model: `${config.roles.verify.provider}/${config.roles.verify.model}` };
+  a.flags.verify = { checked: verdicts.length, failed: failed.length, model: vr.model, independent: !vr.fallback && !vr.model.startsWith(config.roles.gen.provider + '/') };
   if (failed.length) { a.flags.verify_failures = failed.map(f => ({ statement: clip(items[f.id]?.statement ?? '', 160), verdict: f.verdict, reason: f.reason })); return refer('verification_failed', chunkIds); }
 
   // Assemble the answer in the asker's language.

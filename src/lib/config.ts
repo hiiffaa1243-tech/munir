@@ -15,10 +15,12 @@ export const config = {
     // gen: constrained answer generation
     gen: { provider: env('GEN_PROVIDER', 'openai') as Provider, model: env('GEN_MODEL', 'gpt-4.1') },
     // verify: entailment check. MUST be a different provider than gen (uncorrelated errors).
-    verify: { provider: env('VERIFY_PROVIDER', 'google') as Provider, model: env('VERIFY_MODEL', 'gemini-2.5-flash') },
+    verify: { provider: env('VERIFY_PROVIDER', 'google') as Provider, model: env('VERIFY_MODEL', 'gemini-3.8-flash,gemini-3.5-flash,gemini-2.5-flash') },
     // baseline: a general model answering closed-book, used only in evaluation
     baseline: { provider: env('BASELINE_PROVIDER', 'openai') as Provider, model: env('BASELINE_MODEL', 'gpt-4.1') },
   } satisfies Record<string, RoleConfig>,
+  // Used only when the verifier's provider cannot be reached. Recorded on every answer it touches. Set VERIFY_FALLBACK=off to fail closed instead.
+  verifyFallback: env('VERIFY_FALLBACK') === 'off' ? null : ({ provider: env('VERIFY_FALLBACK_PROVIDER', 'openai') as Provider, model: env('VERIFY_FALLBACK_MODEL', 'gpt-4.1-mini') } as RoleConfig),
   embedModel: env('EMBED_MODEL', 'text-embedding-3-small'),
   embedDim: 1536,
   sttModel: env('STT_MODEL', 'whisper-1'),

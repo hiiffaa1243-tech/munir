@@ -44,3 +44,14 @@ export async function GET(req: Request) {
   }
   return json({ items, exists: true });
 }
+
+/** Creates the notebook for a phone-generated key on first use (idempotent). Only the key's hash is stored. */
+export async function POST(req: Request) {
+  if (!rateLimit(`nbc:${clientIp(req)}`, 10)) return bad('too many requests', 429);
+  const key = req.headers.get('x-notebook-key');
+  if (!validKey(key)) return bad('invalid key', 401);
+  const db = sb(); const key_hash = hashKey(key);
+  const { data: nb } = await db.from('notebooks').select('id').eq('key_hash', key_hash).maybeSingle();
+  if (!nb) { const ins = await db.from('notebooks').insert({ key_hash }); if (ins.error) return bad('could not create notebook', 500); }
+  return json({ ok: true });
+}

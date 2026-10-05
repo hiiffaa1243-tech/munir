@@ -4,7 +4,7 @@ import { config, type RoleConfig } from '@/lib/config';
 import { mockJson } from './mock';
 
 export interface ChatMsg { role: 'system' | 'user'; content: string }
-export interface Usage { provider: string; model: string; ms: number; in?: number; out?: number }
+export interface Usage { provider: string; model: string; ms: number; in?: number; out?: number; fallback?: boolean }
 export class ModelError extends Error { constructor(public provider: string, public status: number, msg: string) { super(msg); } }
 
 const TIMEOUT_MS = 45_000;
@@ -28,14 +28,22 @@ function extractJson(raw: string): unknown {
   throw new Error('model did not return JSON');
 }
 
-const noTemperature = (m: string) => /^(o\d|gpt-5)/.test(m);
+// Newer OpenAI families reject a custom temperature. Known ones are skipped up front; unknown ones are learned from the 400.
+const noTemp = new Set<string>();
+const noTemperature = (m: string) => /^(o\d|gpt-5|gpt-6)/.test(m) || noTemp.has(m);
 
-async function chatOpenAI(rc: RoleConfig, msgs: ChatMsg[], json: boolean, maxTokens: number) {
-  const body: any = { model: rc.model, messages: msgs, max_completion_tokens: maxTokens };
+async function chatOpenAI(rc: RoleConfig, msgs: ChatMsg[], json: boolean, maxTokens: number): Promise<{ text: string; in?: number; out?: number }> {
+  const reasoning = /^(o\d|gpt-5|gpt-6)/.test(rc.model);
+  const body: any = { model: rc.model, messages: msgs, max_completion_tokens: reasoning ? maxTokens + 3000 : maxTokens };
   if (!noTemperature(rc.model)) body.temperature = 0;
   if (json) body.response_format = { type: 'json_object' };
-  const d = await post('https://api.openai.com/v1/chat/completions', { authorization: `Bearer ${config.keys.openai}` }, body, 'openai');
-  return { text: d.choices?.[0]?.message?.content ?? '', in: d.usage?.prompt_tokens, out: d.usage?.completion_tokens };
+  try {
+    const d = await post('https://api.openai.com/v1/chat/completions', { authorization: `Bearer ${config.keys.openai}` }, body, 'openai');
+    return { text: d.choices?.[0]?.message?.content ?? '', in: d.usage?.prompt_tokens, out: d.usage?.completion_tokens };
+  } catch (e) {
+    if (e instanceof ModelError && e.status === 400 && /temperature/i.test(e.message) && !noTemp.has(rc.model)) { noTemp.add(rc.model); return chatOpenAI(rc, msgs, json, maxTokens); }
+    throw e;
+  }
 }
 
 async function chatGoogle(rc: RoleConfig, msgs: ChatMsg[], json: boolean, maxTokens: number) {
@@ -43,7 +51,7 @@ async function chatGoogle(rc: RoleConfig, msgs: ChatMsg[], json: boolean, maxTok
   const user = msgs.filter(m => m.role === 'user').map(m => m.content).join('\n\n');
   const body: any = {
     contents: [{ role: 'user', parts: [{ text: user }] }],
-    generationConfig: { temperature: 0, maxOutputTokens: maxTokens, ...(json ? { responseMimeType: 'application/json' } : {}) },
+    generationConfig: { temperature: 0, maxOutputTokens: maxTokens + 6000, ...(json ? { responseMimeType: 'application/json' } : {}) },
   };
   if (sys) body.systemInstruction = { parts: [{ text: sys }] };
   const d = await post(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(rc.model)}:generateContent`, { 'x-goog-api-key': config.keys.google }, body, 'google');
@@ -62,25 +70,63 @@ async function chatAnthropic(rc: RoleConfig, msgs: ChatMsg[], json: boolean, max
 
 export type Role = keyof typeof config.roles;
 
-/** Call a role's model and return parsed JSON (one retry on malformed JSON or 5xx). */
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+const call = (rc: RoleConfig, msgs: ChatMsg[], json: boolean, maxTokens: number) =>
+  rc.provider === 'openai' ? chatOpenAI(rc, msgs, json, maxTokens)
+  : rc.provider === 'google' ? chatGoogle(rc, msgs, json, maxTokens)
+  : chatAnthropic(rc, msgs, json, maxTokens);
+
+// A role may list several candidate models ("a,b,c"). The first one the provider accepts is remembered.
+const chosen = new Map<string, string>();
+const isModelMissing = (e: unknown) => e instanceof ModelError && (e.status === 404 || (e.status === 400 && /model/i.test(e.message) && /not (found|exist|supported)|does not exist|unknown|invalid model|no access|permission/i.test(e.message)) || (e.status === 403 && /model/i.test(e.message)));
+const isTransient = (e: unknown) => !(e instanceof ModelError) || e.status === 429 || e.status >= 500;
+
+/** One role call with candidate-model selection and backoff on transient errors. */
+async function callRole(role: Role, rcBase: RoleConfig, msgs: ChatMsg[], json: boolean, maxTokens: number, parse: boolean) {
+  const key = `${rcBase.provider}:${rcBase.model}`;
+  const all = rcBase.model.split(',').map(m => m.trim()).filter(Boolean);
+  const models = chosen.has(key) ? [chosen.get(key)!] : all;
+  let lastErr: unknown;
+  for (const model of models) {
+    const rc = { provider: rcBase.provider, model };
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const r = await call(rc, msgs, json, maxTokens);
+        const data = parse ? extractJson(r.text) : null;
+        chosen.set(key, model);
+        return { r, data, rc };
+      } catch (e) {
+        lastErr = e;
+        if (isModelMissing(e)) break;                 // try the next candidate
+        if (e instanceof ModelError && !isTransient(e)) throw e;
+        if (attempt < 2) await sleep(attempt ? 2000 : 700);
+      }
+    }
+    if (!isModelMissing(lastErr)) break;
+  }
+  throw lastErr;
+}
+
+/**
+ * Call a role's model and return parsed JSON.
+ * The verifier has a declared fallback: if the independent provider is unreachable, a second model checks instead
+ * and the usage record says so (`fallback: true`), so the loss of provider independence is visible, never silent.
+ */
 export async function chatJson<T = any>(role: Role, msgs: ChatMsg[], opts: { maxTokens?: number } = {}): Promise<{ data: T; usage: Usage }> {
   const rc = config.roles[role];
   const t0 = Date.now();
   if (config.mock || rc.provider === 'mock') return { data: mockJson(role, msgs) as T, usage: { provider: 'mock', model: 'mock', ms: 1 } };
   const maxTokens = opts.maxTokens ?? 1500;
-  let lastErr: unknown;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const r = rc.provider === 'openai' ? await chatOpenAI(rc, msgs, true, maxTokens)
-        : rc.provider === 'google' ? await chatGoogle(rc, msgs, true, maxTokens)
-        : await chatAnthropic(rc, msgs, true, maxTokens);
-      return { data: extractJson(r.text) as T, usage: { provider: rc.provider, model: rc.model, ms: Date.now() - t0, in: r.in, out: r.out } };
-    } catch (e) {
-      lastErr = e;
-      if (e instanceof ModelError && e.status >= 400 && e.status < 500 && e.status !== 429) break;
-    }
+  try {
+    const { r, data, rc: used } = await callRole(role, rc, msgs, true, maxTokens, true);
+    return { data: data as T, usage: { provider: used.provider, model: used.model, ms: Date.now() - t0, in: r.in, out: r.out } };
+  } catch (e) {
+    const fb = config.verifyFallback;
+    if (role !== 'verify' || !fb) throw e;
+    console.error('verifier unavailable, using fallback', String((e as Error).message).slice(0, 200));
+    const { r, data, rc: used } = await callRole(role, fb, msgs, true, maxTokens, true);
+    return { data: data as T, usage: { provider: used.provider, model: used.model, ms: Date.now() - t0, in: r.in, out: r.out, fallback: true } };
   }
-  throw lastErr;
 }
 
 /** Plain text completion (used only by the closed-book evaluation baseline). */
@@ -88,10 +134,8 @@ export async function chatText(role: Role, msgs: ChatMsg[], maxTokens = 700): Pr
   const rc = config.roles[role];
   const t0 = Date.now();
   if (config.mock || rc.provider === 'mock') return { text: 'mock baseline answer', usage: { provider: 'mock', model: 'mock', ms: 1 } };
-  const r = rc.provider === 'openai' ? await chatOpenAI(rc, msgs, false, maxTokens)
-    : rc.provider === 'google' ? await chatGoogle(rc, msgs, false, maxTokens)
-    : await chatAnthropic(rc, msgs, false, maxTokens);
-  return { text: r.text, usage: { provider: rc.provider, model: rc.model, ms: Date.now() - t0, in: r.in, out: r.out } };
+  const { r, rc: used } = await callRole(role, rc, msgs, false, maxTokens, false);
+  return { text: r.text, usage: { provider: used.provider, model: used.model, ms: Date.now() - t0, in: r.in, out: r.out } };
 }
 
 /** Embeddings (OpenAI). Deterministic pseudo-vectors in mock mode. */

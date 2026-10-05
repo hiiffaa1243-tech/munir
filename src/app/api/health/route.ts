@@ -31,7 +31,7 @@ export async function GET(req: Request) {
   if (deep) {
     out.models = {};
     for (const role of ['fast', 'gen', 'verify'] as Role[]) {
-      try { const r = await chatJson(role, [{ role: 'system', content: 'Reply with the JSON object {"ok": true}.' }, { role: 'user', content: 'ping' }], { maxTokens: 50 }); out.models[role] = { ok: (r.data as any)?.ok === true, ms: r.usage.ms }; }
+      try { const r = await chatJson(role, [{ role: 'system', content: 'Reply with the JSON object {"ok": true}.' }, { role: 'user', content: 'ping' }], { maxTokens: 50 }); out.models[role] = { ok: (r.data as any)?.ok === true, ms: r.usage.ms, used: `${r.usage.provider}/${r.usage.model}`, fallback: !!r.usage.fallback }; if (r.usage.fallback) out.verifier_fallback_in_use = true; }
       catch (e) { out.ok = false; out.models[role] = { ok: false, error: String((e as Error).message).slice(0, 300) }; }
     }
     try { const v = await embed(['ping']); out.models.embed = { ok: v[0]?.length === config.embedDim, dim: v[0]?.length }; if (v[0]?.length !== config.embedDim) out.ok = false; }
