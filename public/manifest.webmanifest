@@ -1,0 +1,2 @@
+{ "name": "Munir Notebook", "short_name": "Munir", "start_url": "/n", "scope": "/", "display": "standalone", "background_color": "#F2F4FF", "theme_color": "#12183F",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }] }

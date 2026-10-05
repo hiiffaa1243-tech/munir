@@ -1,0 +1,123 @@
+[
+ {
+  "id": "fatwas",
+  "title": "Fatwas on Hajj, ‘Umrah, and Visitation",
+  "author": "The Scientific Committee (fatwas of the Permanent Committee and senior scholars)",
+  "publisher": "Presidency of Religious Affairs at the Sacred Mosque and the Prophet's Mosque",
+  "lang": "en",
+  "pages": 97,
+  "file": "Fatwas on Hajj, ‘Umrah, and Visitation.pdf",
+  "license": "Published for free distribution by the publisher; text is not redistributed in this repository",
+  "chunks": 132
+ },
+ {
+  "id": "violations",
+  "title": "Violations During Hajj, ‘Umrah and Visitation",
+  "author": "The Scientific Committee",
+  "publisher": "Presidency of Religious Affairs at the Sacred Mosque and the Prophet's Mosque",
+  "lang": "en",
+  "pages": 27,
+  "file": "Violations During Hajj, ‘Umrah and Visitation.pdf",
+  "license": "Published for free distribution by the publisher; text is not redistributed in this repository",
+  "chunks": 22
+ },
+ {
+  "id": "umrah_concise",
+  "title": "Concise Description of ‘Umrah and Its Rulings",
+  "author": "The Scientific Committee",
+  "publisher": "Presidency of Religious Affairs at the Sacred Mosque and the Prophet's Mosque",
+  "lang": "en",
+  "pages": 20,
+  "file": "Concise Description of ‘Umrah and Its Rulings.pdf",
+  "license": "Published for free distribution by the publisher; text is not redistributed in this repository",
+  "chunks": 16
+ },
+ {
+  "id": "umrah_howto",
+  "title": "How to do ‘Umrah, with selected supplications",
+  "author": "Booklets for Visitors to the Two Holy Mosques",
+  "publisher": "Presidency of Religious Affairs at the Sacred Mosque and the Prophet's Mosque",
+  "lang": "en",
+  "pages": 40,
+  "file": "How to do`Umrah.pdf",
+  "license": "Published for free distribution by the publisher; text is not redistributed in this repository",
+  "chunks": 46
+ },
+ {
+  "id": "hajj_howto",
+  "title": "How to Perform Hajj",
+  "author": "Shaykh Muhammad ibn Salih al-‘Uthaymin",
+  "publisher": "IslamHouse",
+  "lang": "en",
+  "pages": 52,
+  "file": "How to Perform Hajj.pdf",
+  "license": "Published for free distribution by the publisher; text is not redistributed in this repository",
+  "chunks": 37
+ },
+ {
+  "id": "guide",
+  "title": "A Guide to Hajj, ‘Umrah and Visiting the Prophet’s Mosque",
+  "author": "The Agency of Islamic Enlightenment in Hajj; approved by the Permanent Committee of Islamic Research and Ifta",
+  "publisher": "IslamHouse",
+  "lang": "en",
+  "pages": 58,
+  "file": "A Guide to Hajj, ‘Umrah and Visiting the Prophet’s Mosque.pdf",
+  "license": "Published for free distribution by the publisher; text is not redistributed in this repository",
+  "chunks": 49
+ },
+ {
+  "id": "rites",
+  "title": "Rites of Hajj and Umrah from the Book and Sunnah",
+  "author": "Shaikh Muhammad Nasir-ud-Din al-Albani",
+  "publisher": "IslamHouse",
+  "lang": "en",
+  "pages": 23,
+  "file": "Rites of Hajj and Umrah.pdf",
+  "license": "Published for free distribution by the publisher; text is not redistributed in this repository",
+  "chunks": 41
+ },
+ {
+  "id": "ahadith",
+  "title": "Ahadith pertaining to Hajj from the Sahihayn",
+  "author": "Compilation from Sahih al-Bukhari and Sahih Muslim",
+  "publisher": "IslamHouse",
+  "lang": "en",
+  "pages": 85,
+  "file": "Ahadith pertaining to Hajj from the Sahihayn.pdf",
+  "license": "Published for free distribution by the publisher; text is not redistributed in this repository",
+  "chunks": 120
+ },
+ {
+  "id": "hady",
+  "title": "Rulings on Sacrificial Animals, Offerings, and Slaughtering",
+  "author": "The Scientific Committee",
+  "publisher": "Presidency of Religious Affairs at the Sacred Mosque and the Prophet's Mosque",
+  "lang": "en",
+  "pages": 15,
+  "file": "Rulings on Sacrificial Animals, Offerings, and Slaughtering.pdf",
+  "license": "Published for free distribution by the publisher; text is not redistributed in this repository",
+  "chunks": 9
+ },
+ {
+  "id": "ten_days",
+  "title": "Merit of the First Ten Days of Dhul-Hijjah",
+  "author": "The Scientific Committee",
+  "publisher": "Presidency of Religious Affairs at the Sacred Mosque and the Prophet's Mosque",
+  "lang": "en",
+  "pages": 13,
+  "file": "Merit of the First Ten Days of Dhul-Hijjah.pdf",
+  "license": "Published for free distribution by the publisher; text is not redistributed in this repository",
+  "chunks": 6
+ },
+ {
+  "id": "fasting",
+  "title": "Some Rulings on Fasting",
+  "author": "The Scientific Committee",
+  "publisher": "Presidency of Religious Affairs at the Sacred Mosque and the Prophet's Mosque",
+  "lang": "en",
+  "pages": 20,
+  "file": "Some Rulings on Fasting.pdf",
+  "license": "Published for free distribution by the publisher; text is not redistributed in this repository",
+  "chunks": 12
+ }
+]
