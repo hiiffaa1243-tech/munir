@@ -71,7 +71,7 @@ Return one JSON object:
 /** Added to the generation request when a published answer is already on screen and only an explanation is wanted. */
 export const EXPLAIN_BLOCK = (published: string) => `EXPLANATION MODE. A published, approved answer is already shown to the asker. Its text:
 """${published}"""
-Do not repeat it. Add ONLY what the passages state that the published text does not: the cases it leaves open (for example men and women, with or without a need or an excuse, deliberately or out of forgetfulness) and what the asker must do in practice. Never contradict the published text. Do not ask a clarifying question ("clarify" must be null) and leave "summary" empty. If the passages add nothing to the published text, return "answerable": false.
+Do not repeat it. Add ONLY what the passages state that the published text does not: the cases it leaves open (for example men and women, with or without a need or an excuse, deliberately or out of forgetfulness) and what the asker must do in practice. Never contradict the published text. Do not ask a clarifying question ("clarify" must be null) and leave "summary" empty. In this mode rule 11 is relaxed: the passages need not name the exact object or situation the asker mentions (a face mask, a particular brand, a modern device). State the rulings the passages do give on the matter it falls under (for a face mask: what the passages say about covering the face in ihram, for men and for women, and when there is a need), each exactly as the passages state it, and do not claim that the passages mention the object itself. Return "answerable": false only if the passages say nothing on the matter beyond the published text.
 `;
 
 export const VERIFY = `TASK:VERIFY

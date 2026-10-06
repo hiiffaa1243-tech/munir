@@ -41,7 +41,7 @@ export async function POST(req: Request) {
         // Internal diagnostics stay on the server.
         // Only the facts a visitor may see travel to the browser: which model checked the answer and how long it took.
         const f = result.flags as Record<string, any>;
-        const flags = { verify: f.verify ? { checked: f.verify.checked, model: f.verify.model, independent: f.verify.independent } : undefined, refer_reason: f.refer_reason };
+        const flags = { verify: f.verify ? { checked: f.verify.checked, model: f.verify.model, independent: f.verify.independent } : undefined, refer_reason: f.refer_reason, explain: f.explain ? { shown: !!f.explain.shown, reason: f.explain.reason } : undefined };
         // `suggest` (tier 'confirm') and `explained` (tier 'verified') are fields of the answer itself and travel with it.
         send({ result: { ...result, flags, timings: { total: result.timings.total } } });
       } catch (e) {
