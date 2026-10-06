@@ -1,6 +1,6 @@
 :root{
   --navy:#12183F;--violet:#6150EA;--tq:#2EF2C2;--tqd:#0B8F74;--bg:#F2F4FF;--card:#FFFFFF;--ink:#12183F;--muted:#5A6088;--line:#DDE1F3;
-  --good:#12805A;--goodbg:#E0F5EC;--warn:#96650B;--warnbg:#FBF0D8;--ref:#5A6088;--refbg:#E9ECF6;--bad:#B3261E;--badbg:#FBE9E7;--vbg:#ECEAFD;
+  --good:#0E6E4D;--goodbg:#E0F5EC;--warn:#855908;--warnbg:#FBF0D8;--ref:#5A6088;--refbg:#E9ECF6;--bad:#B3261E;--badbg:#FBE9E7;--vbg:#ECEAFD;
   --r:16px;
 }
 *{box-sizing:border-box;margin:0;padding:0}
@@ -83,8 +83,12 @@ table.t td{padding:8px 10px;border-top:1px solid var(--line);vertical-align:top}
 .kiosk .wrap{padding-top:28px}
 @media (min-width:900px){.kiosk .askbox textarea{font-size:22px}.kiosk .sum{font-size:24px}}
 @media print{.noprint{display:none!important}body{background:#fff}.card{break-inside:avoid;border-color:#bbb}}
-@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;scroll-behavior:auto!important}}
 :focus-visible{outline:3px solid var(--tqd);outline-offset:2px}
+/* text boxes set outline:none above; keyboard users still get the same ring as every other control */
+input.in:focus-visible,textarea.in:focus-visible,select.in:focus-visible,.askbox textarea:focus-visible{outline:3px solid var(--tqd);outline-offset:2px}
+/* read by screen readers, not shown */
+.sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}
 .foot{margin-top:14px;display:flex;gap:6px 18px;flex-wrap:wrap;justify-content:center;font-size:14px}
 .foot a{color:var(--muted);text-decoration:none;border-bottom:1px solid var(--line)}
 .foot a:hover{color:var(--violet)}

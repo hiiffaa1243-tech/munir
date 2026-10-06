@@ -35,9 +35,9 @@ export default function AnswerCard({ a, question, onSave, sayKey, children }: { 
   }
 
   return (
-    <article className="card" dir={dirOf(L)} lang={L} data-say={key}>
+    <article className="card" dir={dirOf(L)} lang={L} data-say={key} aria-labelledby={`${own}-tier`}>
       {question && <div className="q" dir="auto">{question}</div>}
-      <span className={`badge b-${a.tier}`}><i />{tr(a.tier === 'verified' && /^(PC|DR)-/.test(a.verified?.code ?? '') ? 't_published' : `t_${a.tier}`)}</span>
+      <span id={`${own}-tier`} className={`badge b-${a.tier}`}><i aria-hidden="true" />{tr(a.tier === 'verified' && /^(PC|DR)-/.test(a.verified?.code ?? '') ? 't_published' : `t_${a.tier}`)}</span>
       {a.notice && <p className="notice"><Say id="note" text={a.notice} /></p>}
       {a.tier === 'confirm' && a.suggest && <p className="sum suggest" dir="auto"><Say id="sug" text={a.suggest} /></p>}
       {a.tier === 'clarify' && a.clarify && <p className="sum"><Say id="clar" text={a.clarify} /></p>}
@@ -49,7 +49,7 @@ export default function AnswerCard({ a, question, onSave, sayKey, children }: { 
       {/* A generated explanation never blends into the published text: it sits in its own amber block under it. */}
       <div className={explained ? 'explain' : undefined}>
         {explained && (<>
-          <span className="badge b-grounded"><i /><Say id="xh" text={tr('explain_h')} /></span>
+          <span className="badge b-grounded"><i aria-hidden="true" /><Say id="xh" text={tr('explain_h')} /></span>
           <p className="notice">{tr('explain_note')}</p>
         </>)}
         {a.claims.length > 0 && (

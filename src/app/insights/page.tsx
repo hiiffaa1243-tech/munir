@@ -15,8 +15,8 @@ function Bars({ data, labels }: { data: Record<string, number>; labels?: Record<
 export default function Insights() {
   const [d, setD] = useState<any>(null); const [err, setErr] = useState(false);
   useEffect(() => { document.documentElement.lang = 'ar'; document.documentElement.dir = 'rtl'; fetch('/api/insights').then(r => r.ok ? r.json() : Promise.reject()).then(setD).catch(() => setErr(true)); }, []);
-  if (err) return <main><div className="wrap"><div className="err">تعذر تحميل المؤشرات.</div></div></main>;
-  if (!d) return <main><div className="wrap"><div className="stage"><span className="spin" />جارٍ التحميل</div></div></main>;
+  if (err) return <main><div className="wrap"><div className="err" role="alert">تعذر تحميل المؤشرات. حدّث الصفحة وحاول مرة أخرى.</div></div></main>;
+  if (!d) return <main><div className="wrap"><div className="stage" role="status" aria-live="polite"><span className="spin" aria-hidden="true" />جارٍ التحميل</div></div></main>;
   const answered = (d.by_tier.verified ?? 0) + (d.by_tier.grounded ?? 0);
   return (
     <main><div className="wrap wide">
@@ -40,18 +40,18 @@ export default function Insights() {
       </div>
 
       <h2 className="pg">فجوات المعرفة: مراحل يكثر فيها ما لا تغطيه المصادر</h2>
-      <div className="tablewrap"><table className="t"><thead><tr><th>المرحلة</th><th>الأسئلة</th><th>المحال منها</th><th>نسبة الإحالة</th></tr></thead>
+      <div className="tablewrap" tabIndex={0} role="region" aria-label="فجوات المعرفة"><table className="t"><thead><tr><th>المرحلة</th><th>الأسئلة</th><th>المحال منها</th><th>نسبة الإحالة</th></tr></thead>
         <tbody>{d.knowledge_gaps.map((g: any) => <tr key={g.stage}><td dir="auto">{g.stage}</td><td>{g.total}</td><td>{g.referred}</td><td>{pct(g.rate)}</td></tr>)}</tbody></table></div>
 
       <h2 className="pg">الأسئلة الأكثر تكراراً</h2>
       {d.top_questions.length === 0 ? <p className="muted">لم يتكرر سؤال بعد بما يكفي لعرضه.</p> : (
-        <div className="tablewrap"><table className="t"><thead><tr><th>السؤال</th><th>التكرار</th><th>اللغات</th><th>النتيجة</th></tr></thead>
+        <div className="tablewrap" tabIndex={0} role="region" aria-label="الأسئلة الأكثر تكراراً"><table className="t"><thead><tr><th>السؤال</th><th>التكرار</th><th>اللغات</th><th>النتيجة</th></tr></thead>
           <tbody>{d.top_questions.map((q: any, i: number) => <tr key={i}><td>{q.q_ar || q.q_en}</td><td>{q.n}</td><td dir="ltr">{q.langs.join(', ')}</td><td>{TIER[q.tier] ?? q.tier}</td></tr>)}</tbody></table></div>
       )}
 
       {d.top_referred.length > 0 && (<>
         <h2 className="pg">أحدث الأسئلة المحالة (تظهر للمتخصص فقط)</h2>
-        <div className="tablewrap"><table className="t"><thead><tr><th>السؤال</th><th>اللغة</th><th>سبب الإحالة</th></tr></thead>
+        <div className="tablewrap" tabIndex={0} role="region" aria-label="أحدث الأسئلة المحالة"><table className="t"><thead><tr><th>السؤال</th><th>اللغة</th><th>سبب الإحالة</th></tr></thead>
           <tbody>{d.top_referred.map((q: any, i: number) => <tr key={i}><td>{q.q_ar || q.q_en}</td><td>{LANG[q.lang] ?? q.lang}</td><td dir="ltr">{q.reason ?? '—'}</td></tr>)}</tbody></table></div>
       </>)}
     </div></main>

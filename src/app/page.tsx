@@ -254,6 +254,10 @@ export default function ServicePoint() {
   // The visitor's own words, shown once: live while they speak, then until the answer card takes over.
   const caption = voice.caption || (asker.busy ? asker.question : '');
 
+  // For screen readers: the kind of answer, and its text when Munir is not reading it aloud himself (no double speech).
+  const tierKey = a ? (a.tier === 'verified' && /^(PC|DR)-/.test(a.verified?.code ?? '') ? 't_published' : `t_${a.tier}`) : '';
+  const announce = a ? [t(a.lang, tierKey), sound ? '' : (a.suggest || a.clarify || a.summary || a.notice || '')].filter(Boolean).join('. ') : '';
+
   // The rings follow the live level without re-rendering the page.
   const orb = useRef<HTMLDivElement>(null);
   const { level } = voice;
@@ -283,7 +287,7 @@ export default function ServicePoint() {
         </header>
 
         <section className={`vstage noprint${a ? ' compact' : ''}`} data-mode={mode}>
-          {!a && <h1 className="vtitle">{t(lang, 'tagline')}</h1>}
+          {a ? <h1 className="sr">{t(lang, 'tagline')}</h1> : <h1 className="vtitle">{t(lang, 'tagline')}</h1>}
           <div className="orb" ref={orb}>
             <span className="halo h2" aria-hidden="true" /><span className="halo h1" aria-hidden="true" />
             <button type="button" className="micbtn" onClick={micPress} disabled={thinking} aria-pressed={mode === 'listening'} aria-label={t(lang, mode === 'listening' ? 'v_mic_off' : 'v_mic_on')}><MicIcon /></button>
@@ -299,6 +303,8 @@ export default function ServicePoint() {
         </form>
 
         {asker.error && <div className="err" role="alert">{t(lang, asker.error)}</div>}
+        {/* Always in the page, so that a new answer is announced when its text arrives. */}
+        <p className="sr" role="status" aria-live="polite" data-announce lang={a?.lang} dir="auto">{announce}</p>
 
         {!a && !asker.busy && (
           <section className="noprint">
@@ -318,7 +324,7 @@ export default function ServicePoint() {
               )}
               {a.tier === 'clarify' && (
                 <div className="rowbtns">
-                  <input className="in" style={{ flex: 1, minWidth: 180 }} value={clar} onChange={e => setClar(e.target.value)} placeholder={t(a.lang, 'clarify_ph')} dir="auto" onKeyDown={e => { if (e.key === 'Enter') sendClarification(); }} />
+                  <input className="in" style={{ flex: 1, minWidth: 180 }} value={clar} onChange={e => setClar(e.target.value)} placeholder={t(a.lang, 'clarify_ph')} aria-label={t(a.lang, 'clarify_ph')} dir="auto" onKeyDown={e => { if (e.key === 'Enter') sendClarification(); }} />
                   <button type="button" className="btn sm" onClick={sendClarification}>{t(a.lang, 'send')}</button>
                 </div>
               )}
@@ -344,12 +350,12 @@ export default function ServicePoint() {
           <div className="box" onClick={e => e.stopPropagation()}>
             <h2 style={{ fontSize: 22 }}>{t(lang, 'save_h')}</h2>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={claim.qr} alt="QR" />
+            <img src={claim.qr} alt={`QR: ${claim.short_url}`} />
             <p className="muted small">{t(lang, 'save_or')}</p>
             <p dir="ltr" style={{ fontWeight: 600 }}>{claim.short_url}</p>
             <p className="code">{claim.code}</p>
             <p className="muted small">{t(lang, 'save_note')}</p>
-            <div className="rowbtns" style={{ justifyContent: 'center' }}><button type="button" className="btn sm ghost" onClick={closeClaim}>{t(lang, 'close')}</button></div>
+            <div className="rowbtns" style={{ justifyContent: 'center' }}><button type="button" className="btn sm ghost" onClick={closeClaim} autoFocus>{t(lang, 'close')}</button></div>
           </div>
         </div>
       )}

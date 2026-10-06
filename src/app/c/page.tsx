@@ -31,7 +31,7 @@ export default function Claim() {
   return (
     <main><div className="wrap" style={{ maxWidth: 480 }}>
       <header className="top"><div className="brand"><b>{t(lang, 'nb_title')}</b></div></header>
-      {state === 'saving' && <div className="stage"><span className="spin" />{t(lang, 'c_saving')}</div>}
+      {state === 'saving' && <div className="stage" role="status" aria-live="polite"><span className="spin" aria-hidden="true" />{t(lang, 'c_saving')}</div>}
       {state === 'fail' && <div className="err" role="alert">{t(lang, 'c_fail')}</div>}
       {state !== 'saving' && (
         <div className="card">

@@ -1,0 +1,540 @@
+{
+ "date": "2026-10-06",
+ "tool": "axe-core 4.14.0 via Playwright (Chromium, headless)",
+ "standard": "WCAG 2.1 A + AA (tags wcag2a, wcag2aa, wcag21a, wcag21aa)",
+ "viewports": {
+  "desktop": "1180x820",
+  "phone": "390x844"
+ },
+ "languages": [
+  "ar (RTL)",
+  "en (LTR)"
+ ],
+ "screens": [
+  "/ idle",
+  "/ with answer",
+  "/ with did-you-mean card",
+  "/ with save-to-phone dialog",
+  "/n",
+  "/c",
+  "/demo",
+  "/eval",
+  "/insights",
+  "/specialist (login)"
+ ],
+ "counting": "a violation = one failed rule on one audited screen (page state x language x viewport, 40 screens); nodes = elements failing that rule",
+ "build": "next build + next start, MUNIR_MOCK=1; /api/ask and /api/claim answered by the audit script",
+ "before": {
+  "screens_audited": 40,
+  "screens_with_violations": 10,
+  "violations_total": 10,
+  "nodes_total": 42,
+  "by_impact": {
+   "critical": {
+    "occurrences": 0,
+    "nodes": 0
+   },
+   "serious": {
+    "occurrences": 10,
+    "nodes": 42
+   },
+   "moderate": {
+    "occurrences": 0,
+    "nodes": 0
+   },
+   "minor": {
+    "occurrences": 0,
+    "nodes": 0
+   }
+  },
+  "by_rule": {
+   "color-contrast": {
+    "impact": "serious",
+    "help": "Elements must meet minimum color contrast ratio thresholds",
+    "occurrences": 8,
+    "nodes": 40,
+    "pages": [
+     "home-answer",
+     "home-save-dialog"
+    ]
+   },
+   "scrollable-region-focusable": {
+    "impact": "serious",
+    "help": "Scrollable region must have keyboard access",
+    "occurrences": 2,
+    "nodes": 2,
+    "pages": [
+     "/eval"
+    ]
+   }
+  },
+  "axe_rules_passed_sum": 912,
+  "needs_manual_review": [
+   "/demo: color-contrast",
+   "home-save-dialog: color-contrast"
+  ],
+  "per_screen": [
+   {
+    "page": "home-answer",
+    "lang": "ar",
+    "viewport": "desktop",
+    "violations": [
+     {
+      "id": "color-contrast",
+      "impact": "serious",
+      "nodes": 4,
+      "example": ".b-verified"
+     }
+    ]
+   },
+   {
+    "page": "home-save-dialog",
+    "lang": "ar",
+    "viewport": "desktop",
+    "violations": [
+     {
+      "id": "color-contrast",
+      "impact": "serious",
+      "nodes": 4,
+      "example": ".b-verified"
+     }
+    ]
+   },
+   {
+    "page": "home-answer",
+    "lang": "ar",
+    "viewport": "phone",
+    "violations": [
+     {
+      "id": "color-contrast",
+      "impact": "serious",
+      "nodes": 4,
+      "example": ".b-verified"
+     }
+    ]
+   },
+   {
+    "page": "home-save-dialog",
+    "lang": "ar",
+    "viewport": "phone",
+    "violations": [
+     {
+      "id": "color-contrast",
+      "impact": "serious",
+      "nodes": 4,
+      "example": ".b-verified"
+     }
+    ]
+   },
+   {
+    "page": "/eval",
+    "lang": "ar",
+    "viewport": "phone",
+    "violations": [
+     {
+      "id": "scrollable-region-focusable",
+      "impact": "serious",
+      "nodes": 1,
+      "example": ".tablewrap"
+     }
+    ]
+   },
+   {
+    "page": "home-answer",
+    "lang": "en",
+    "viewport": "desktop",
+    "violations": [
+     {
+      "id": "color-contrast",
+      "impact": "serious",
+      "nodes": 6,
+      "example": ".b-verified"
+     }
+    ]
+   },
+   {
+    "page": "home-save-dialog",
+    "lang": "en",
+    "viewport": "desktop",
+    "violations": [
+     {
+      "id": "color-contrast",
+      "impact": "serious",
+      "nodes": 6,
+      "example": ".b-verified"
+     }
+    ]
+   },
+   {
+    "page": "home-answer",
+    "lang": "en",
+    "viewport": "phone",
+    "violations": [
+     {
+      "id": "color-contrast",
+      "impact": "serious",
+      "nodes": 6,
+      "example": ".b-verified"
+     }
+    ]
+   },
+   {
+    "page": "home-save-dialog",
+    "lang": "en",
+    "viewport": "phone",
+    "violations": [
+     {
+      "id": "color-contrast",
+      "impact": "serious",
+      "nodes": 6,
+      "example": ".b-verified"
+     }
+    ]
+   },
+   {
+    "page": "/eval",
+    "lang": "en",
+    "viewport": "phone",
+    "violations": [
+     {
+      "id": "scrollable-region-focusable",
+      "impact": "serious",
+      "nodes": 1,
+      "example": ".tablewrap"
+     }
+    ]
+   }
+  ],
+  "scripted_checks": {
+   "a_keyboard": false,
+   "b_live_regions": false,
+   "c_lang_dir": true,
+   "d_reduced_motion": true,
+   "e_error_states": true
+  },
+  "scripted_checks_detail": {
+   "a_keyboard": {
+    "tab_stops_idle": 20,
+    "reaches_mic": true,
+    "reaches_textbox": true,
+    "reaches_language_buttons": 7,
+    "reaches_switches": 2,
+    "all_stops_have_visible_focus_ring": false,
+    "stops_without_ring": [
+     {
+      "tag": "INPUT",
+      "cls": "in",
+      "label": "اكتب سؤالك عن الحج أو العمرة",
+      "ring": false,
+      "inCard": false
+     }
+    ],
+    "enter_activates_language": true,
+    "space_activates_language": true,
+    "enter_activates_mic": true,
+    "escape_stops_listening": true,
+    "answer_actions_reached": [
+     "افتح الصفحة الأصلية",
+     "المصادر (2)",
+     "النص المصدري",
+     "أعد القراءة",
+     "احفظها في جوالك",
+     "بلّغ عن الإجابة",
+     "افتح الصفحة الأصلية"
+    ],
+    "answer_actions_have_focus_ring": true,
+    "enter_opens_save_dialog": true,
+    "focus_inside_dialog_after_open": false,
+    "escape_closes_dialog": true,
+    "pass": false
+   },
+   "b_live_regions": {
+    "status_line_idle": {
+     "role": "status",
+     "live": "polite",
+     "text": "اضغط وتحدث"
+    },
+    "answer_announcer_present_before_answer": false,
+    "status_line_thinking": {
+     "role": "status",
+     "live": "polite",
+     "text": "أفهم سؤالك"
+    },
+    "answer_announcement": null,
+    "answer_card_labelled": false,
+    "pass": false
+   },
+   "c_lang_dir": {
+    "load_?lang=en": [
+     "en",
+     "ltr"
+    ],
+    "click_ar": [
+     "ar",
+     "rtl"
+    ],
+    "click_en": [
+     "en",
+     "ltr"
+    ],
+    "click_ur": [
+     "ur",
+     "rtl"
+    ],
+    "click_id": [
+     "id",
+     "ltr"
+    ],
+    "click_fr": [
+     "fr",
+     "ltr"
+    ],
+    "click_hi": [
+     "hi",
+     "ltr"
+    ],
+    "click_zh": [
+     "zh",
+     "ltr"
+    ],
+    "/n_keeps_choice(zh)": [
+     "zh",
+     "ltr"
+    ],
+    "pass": true
+   },
+   "d_reduced_motion": {
+    "no-preference": {
+     "thinking_ring_animation": "orbit",
+     "mic_transition": "0.2s, 0.15s"
+    },
+    "reduce": {
+     "thinking_ring_animation": "none",
+     "mic_transition": "0s"
+    },
+    "pass": true
+   },
+   "e_error_states": {
+    "mic_denied": {
+     "alert": "The microphone is not available. Please type your question.",
+     "hint": null,
+     "hint_role": null
+    },
+    "ask_network_failure": {
+     "alert": "Something went wrong. Please try again.",
+     "hint": null,
+     "hint_role": null,
+     "textbox_still_usable": true
+    },
+    "speech_not_recognised": {
+     "alert": null,
+     "hint": "I did not hear a question. Tap the microphone and try again, or type it.",
+     "hint_role": "status"
+    },
+    "pass": true
+   }
+  }
+ },
+ "after": {
+  "screens_audited": 40,
+  "screens_with_violations": 2,
+  "violations_total": 2,
+  "nodes_total": 2,
+  "by_impact": {
+   "critical": {
+    "occurrences": 0,
+    "nodes": 0
+   },
+   "serious": {
+    "occurrences": 2,
+    "nodes": 2
+   },
+   "moderate": {
+    "occurrences": 0,
+    "nodes": 0
+   },
+   "minor": {
+    "occurrences": 0,
+    "nodes": 0
+   }
+  },
+  "by_rule": {
+   "scrollable-region-focusable": {
+    "impact": "serious",
+    "help": "Scrollable region must have keyboard access",
+    "occurrences": 2,
+    "nodes": 2,
+    "pages": [
+     "/eval"
+    ]
+   }
+  },
+  "axe_rules_passed_sum": 920,
+  "needs_manual_review": [
+   "/demo: color-contrast",
+   "/insights: th-has-data-cells",
+   "home-save-dialog: color-contrast"
+  ],
+  "per_screen": [
+   {
+    "page": "/eval",
+    "lang": "ar",
+    "viewport": "phone",
+    "violations": [
+     {
+      "id": "scrollable-region-focusable",
+      "impact": "serious",
+      "nodes": 1,
+      "example": ".tablewrap"
+     }
+    ]
+   },
+   {
+    "page": "/eval",
+    "lang": "en",
+    "viewport": "phone",
+    "violations": [
+     {
+      "id": "scrollable-region-focusable",
+      "impact": "serious",
+      "nodes": 1,
+      "example": ".tablewrap"
+     }
+    ]
+   }
+  ],
+  "scripted_checks": {
+   "a_keyboard": true,
+   "b_live_regions": true,
+   "c_lang_dir": true,
+   "d_reduced_motion": true,
+   "e_error_states": true
+  },
+  "scripted_checks_detail": {
+   "a_keyboard": {
+    "tab_stops_idle": 20,
+    "reaches_mic": true,
+    "reaches_textbox": true,
+    "reaches_language_buttons": 7,
+    "reaches_switches": 2,
+    "all_stops_have_visible_focus_ring": true,
+    "stops_without_ring": [],
+    "enter_activates_language": true,
+    "space_activates_language": true,
+    "enter_activates_mic": true,
+    "escape_stops_listening": true,
+    "answer_actions_reached": [
+     "افتح الصفحة الأصلية",
+     "المصادر (2)",
+     "النص المصدري",
+     "أعد القراءة",
+     "احفظها في جوالك",
+     "بلّغ عن الإجابة",
+     "افتح الصفحة الأصلية"
+    ],
+    "answer_actions_have_focus_ring": true,
+    "enter_opens_save_dialog": true,
+    "focus_inside_dialog_after_open": true,
+    "escape_closes_dialog": true,
+    "pass": true
+   },
+   "b_live_regions": {
+    "status_line_idle": {
+     "role": "status",
+     "live": "polite",
+     "text": "اضغط وتحدث"
+    },
+    "answer_announcer_present_before_answer": true,
+    "status_line_thinking": {
+     "role": "status",
+     "live": "polite",
+     "text": "أفهم سؤالك"
+    },
+    "answer_announcement": {
+     "role": "status",
+     "live": "polite",
+     "text": "نص منشور من مرجع معتمد. إذا تطيب المحرم عمدا فعليه الفدية، وهذا باتفاق المذاهب الفقهية الأربعة."
+    },
+    "answer_card_labelled": true,
+    "pass": true
+   },
+   "c_lang_dir": {
+    "load_?lang=en": [
+     "en",
+     "ltr"
+    ],
+    "click_ar": [
+     "ar",
+     "rtl"
+    ],
+    "click_en": [
+     "en",
+     "ltr"
+    ],
+    "click_ur": [
+     "ur",
+     "rtl"
+    ],
+    "click_id": [
+     "id",
+     "ltr"
+    ],
+    "click_fr": [
+     "fr",
+     "ltr"
+    ],
+    "click_hi": [
+     "hi",
+     "ltr"
+    ],
+    "click_zh": [
+     "zh",
+     "ltr"
+    ],
+    "/n_keeps_choice(zh)": [
+     "zh",
+     "ltr"
+    ],
+    "pass": true
+   },
+   "d_reduced_motion": {
+    "no-preference": {
+     "thinking_ring_animation": "orbit",
+     "mic_transition": "0.2s, 0.15s"
+    },
+    "reduce": {
+     "thinking_ring_animation": "none",
+     "mic_transition": "0s"
+    },
+    "pass": true
+   },
+   "e_error_states": {
+    "mic_denied": {
+     "alert": "The microphone is not available. Please type your question.",
+     "hint": null,
+     "hint_role": null
+    },
+    "ask_network_failure": {
+     "alert": "Something went wrong. Please try again.",
+     "hint": null,
+     "hint_role": null,
+     "textbox_still_usable": true
+    },
+    "speech_not_recognised": {
+     "alert": null,
+     "hint": "I did not hear a question. Tap the microphone and try again, or type it.",
+     "hint_role": "status"
+    },
+    "pass": true
+   }
+  }
+ },
+ "remaining": [
+  {
+   "rule": "scrollable-region-focusable",
+   "where": "/eval at 390x844 (results table wrapper .tablewrap)",
+   "why": "file owned by another work package during this pass; fix is tabIndex=0 + role=region + aria-label on the wrapper, already applied to the same pattern on /insights"
+  }
+ ],
+ "limits": "Automated checks detect only part of accessibility problems. No test with blind or low-vision pilgrims and no manual screen-reader pass (VoiceOver, TalkBack, NVDA) has been run yet."
+}

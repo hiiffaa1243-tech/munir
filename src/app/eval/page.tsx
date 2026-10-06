@@ -7,12 +7,99 @@ const pct = (x: number | null | undefined) => (x === null || x === undefined ? '
 
 function Tile({ v, k, sub }: { v: string; k: string; sub?: string }) { return <div className="tile"><div className="v">{v}</div><div className="k">{k}</div>{sub && <div className="small muted" style={{ marginTop: 4 }}>{sub}</div>}</div>; }
 
+// ---------- error register: every held-out failure of the blind run or of the final version, and what became of it ----------
+type FailKind = 'over_refer' | 'answered_personal' | 'lookalike' | 'other' | 'not_run';
+const abst = (t: string | null | undefined) => t === 'referred' || t === 'out_of_scope';
+const wantsAbst = (e: string) => e === 'referred' || e === 'out_of_scope';
+/** The kind of failure, read from the expectation and the stored behaviour alone. */
+function failKind(expected: string, tier: string | null | undefined): FailKind {
+  if (!tier) return 'not_run';
+  if (expected === 'not_verified') return 'lookalike';
+  if (wantsAbst(expected)) return 'answered_personal';
+  if (abst(tier)) return 'over_refer';
+  return 'other';
+}
+const KIND: Record<FailKind, string> = { over_refer: 'إحالة زائدة', answered_personal: 'أجاب حيث تجب الإحالة', lookalike: 'مطابقة خادعة', other: 'تصرف غير المتوقع', not_run: 'لم يُشغَّل' };
+// What was changed for each kind of failure between the runs, as recorded in docs/EVALUATION.md. General rules only, no per-question patch.
+const FIX: Record<FailKind, string> = {
+  over_refer: 'إحالة زائدة: أُضيفت إعادة المحاولة عند حد المعدل لدى المزوّد، وصارت العبارة التي لا تجتاز التحقق تُحذف وحدها وتبقى العبارات المسندة بدل إسقاط الإجابة كلها، ويُوسَّع البحث مرة واحدة حين يمتنع المولّد مع تطابق واثق.',
+  answered_personal: 'حالة شخصية أو خارج النطاق أُجيبت: وُضِّح تعريف الحالة الشخصية في تعليمات التصنيف بأمثلة من خارج مجموعة الاختبار، وصارت الحالة الشخصية التي تطابق إجابة منشورة تُحال مع عرض تلك الإجابة معلومةً عامة.',
+  lookalike: 'مطابقة خادعة: أُعيد استخدام إجابة منشورة لسؤال شبيه. لم يُجرَ تغيير خاص بهذه الفئة بين التشغيلات، ولم يُعدَّل التوقع في مجموعة الاختبار.',
+  other: 'تصرف غير المتوقع: رُوجعت الحالة ضمن مراجعة الإخفاقات واحداً واحداً بعد التشغيل الثاني، دون تعديل خاص بها.',
+  not_run: 'لا نتيجة مخزنة لهذه الحالة في هذا التشغيل.',
+};
+const FIX_F = 'سؤال مضلل أو خلافي أو محاولة توجيه: شُدّدت التعليمات للأسئلة الخلافية والمحمّلة ومحاولات الحقن، مع البقاء على نص المصادر.';
+const OPEN_NOTE = 'مفتوحة: تُراجع في الدورة القادمة، ومثلها يُحال إلى المتخصص الشرعي.';
+const REGRESSED_NOTE = 'تراجعت: كانت صحيحة في التشغيل الأعمى وأخفقت في النسخة النهائية. تُراجع في الدورة القادمة.';
+
+function Register({ d }: { d: any }) {
+  const hasFinal = (d?.final?.munir_runs ?? 0) > 0; const hasAfter = (d?.holdout_after?.munir_runs ?? 0) > 0;
+  // The latest stored version of the held-out run: the final version when it exists, otherwise the post-fix re-run.
+  const last = hasFinal ? 'final' : hasAfter ? 'after' : null;
+  const lastName = last === 'final' ? 'النسخة النهائية' : 'بعد الإصلاح';
+  const items = useMemo(() => ((d?.cases ?? []) as any[]).filter(c => c?.split === 'holdout').map(c => {
+    const t1 = c.tier ?? null; const ok1 = c.ok ?? null;
+    const tL = last === 'final' ? c.tier4 ?? null : last === 'after' ? c.tier2 ?? null : null;
+    const okL = last === 'final' ? c.ok4 ?? null : last === 'after' ? c.ok2 ?? null : null;
+    const rL = last === 'final' ? c.reason4 ?? null : last === 'after' ? c.reason2 ?? null : null;
+    const status = ok1 === false ? (okL === true ? 'fixed' : okL === false ? 'open' : 'unknown') : ok1 === true && okL === false ? 'regressed' : null;
+    return { c, t1, ok1, r1: c.munir?.reason ?? null, tL, okL, rL, status };
+  }).filter(x => x.status !== null), [d, last]);
+  const n = (k: string) => items.filter(x => x.status === k).length;
+  const failed1 = items.filter(x => x.ok1 === false).length;
+  const ran1 = d?.holdout?.munir_runs ?? 0; const stab = d?.final?.stability;
+  const [only, setOnly] = useState<'all' | 'fixed' | 'open' | 'regressed'>('all');
+  const shown = items.filter(x => only === 'all' || x.status === only);
+  if (!ran1) return <div className="card center muted">لم يُشغَّل التقييم على الأسئلة المحجوبة بعد، فلا سجل للأخطاء.</div>;
+  const badge = (st: string | null) => st === 'fixed' ? <span className="pill g">عولجت</span> : st === 'open' ? <span className="pill b">مفتوحة</span> : st === 'regressed' ? <span className="pill w">تراجعت</span> : <span className="pill">لم تُقَس بعد</span>;
+  const cell = (tier: string | null, ok: boolean | null, reason: string | null) => tier
+    ? <><span className={`pill ${ok ? 'g' : 'b'}`}>{TIER[tier] ?? tier}</span>{reason && <div className="small muted" dir="ltr" style={{ textAlign: 'right', marginTop: 3 }}>{reason}</div>}</>
+    : <span className="pill">لم يُشغَّل</span>;
+  return (<>
+    <p className="small muted" style={{ marginBottom: 6 }}>سجل بكل حالة من الأسئلة المحجوبة أخفقت في التشغيل الأعمى الأول أو تخفق في {last ? lastName : 'التشغيل الأحدث'}: ما المتوقع، وما الذي حدث، وما الذي تغيّر في النظام بسببها، وما حالها الآن.</p>
+    <p className="small" style={{ marginBottom: 10 }}><b>كل خطأ هنا مأخوذ من نتائج التقييم المخزّنة، ولم يُحذف منها شيء.</b></p>
+    <div className="grid2">
+      <Tile v={String(failed1)} k="إخفاقات التشغيل الأعمى الأول" sub={`من ${ran1} سؤالاً محجوباً`} />
+      <Tile v={last ? String(n('fixed')) : '—'} k="عولجت" sub={last ? `أخفقت أولاً وتتصرف كما يجب في ${lastName}` : 'لا تشغيل لاحق مخزّن'} />
+      <Tile v={last ? String(n('open')) : '—'} k="مفتوحة" sub="أخفقت أولاً وما زالت تخفق" />
+      <Tile v={last ? String(n('regressed')) : '—'} k="تراجعت" sub="نجحت أولاً وتخفق الآن" />
+    </div>
+    <p className="small muted" style={{ marginTop: 10 }}>«عولجت» تعني أن الحالة تصرفت كما يجب في تشغيل {last ? lastName : 'لاحق'}، وهو تشغيل غير أعمى لأن الأسئلة صارت معروفة للفريق.{typeof stab === 'number' ? ` ثبات التصرف عند إعادة التشغيل ${pct(stab)}، فقد يتبدل تصرف بعض الحالات عند الإعادة.` : ''} المعالجات قواعد عامة في النظام، وليست تعديلاً خاصاً بسؤال بعينه.{n('unknown') > 0 ? ` ${n('unknown')} حالة لا نتيجة مخزنة لها في التشغيل الأحدث.` : ''}</p>
+    <nav className="tabs" aria-label="تصفية السجل">
+      {(['all', 'open', 'regressed', 'fixed'] as const).map(k => <button key={k} className="chip" aria-pressed={only === k} onClick={() => setOnly(k)}>{k === 'all' ? `الكل (${items.length})` : k === 'open' ? `مفتوحة (${n('open')})` : k === 'regressed' ? `تراجعت (${n('regressed')})` : `عولجت (${n('fixed')})`}</button>)}
+    </nav>
+    <div className="tablewrap" tabIndex={0} role="region" aria-label="جدول النتائج"><table className="t">
+      <caption className="small muted" style={{ captionSide: 'top', textAlign: 'start', padding: '6px 10px' }}>سجل الأخطاء ومعالجتها على الأسئلة المحجوبة</caption>
+      <thead><tr><th scope="col">#</th><th scope="col">الفئة</th><th scope="col">اللغة</th><th scope="col">المتوقع</th><th scope="col">التشغيل الأعمى الأول</th><th scope="col">{last ? lastName : 'التشغيل الأحدث'}</th><th scope="col">الحالة</th><th scope="col">المعالجة</th></tr></thead>
+      <tbody>
+        {shown.length === 0 && <tr><td colSpan={8} className="muted">لا حالات في هذا التصنيف.</td></tr>}
+        {shown.map(x => {
+          // The treatment is chosen by the kind of the failure that was actually recorded: the blind run's, or the final one's for a regression.
+          const kind = x.status === 'regressed' ? failKind(x.c.expected, x.tL) : failKind(x.c.expected, x.t1);
+          const fix = x.status === 'regressed' ? REGRESSED_NOTE : x.c.category === 'F' && kind !== 'not_run' ? FIX_F : FIX[kind];
+          return (<tr key={x.c.id}>
+            <td dir="ltr"><b>{x.c.id}</b></td>
+            <td className="small">{CAT[x.c.category] ?? x.c.category}<div className="muted" dir="auto" style={{ marginTop: 3 }}>{x.c.lang !== 'ar' && x.c.meaning_ar ? x.c.meaning_ar : x.c.question}</div></td>
+            <td dir="ltr">{x.c.lang}</td>
+            <td className="small">{TIER[x.c.expected] ?? x.c.expected}</td>
+            <td>{cell(x.t1, x.ok1, x.r1)}</td>
+            <td>{last ? cell(x.tL, x.okL, x.rL) : <span className="pill">لم يُشغَّل</span>}</td>
+            <td>{badge(x.status)}</td>
+            <td className="small"><b>{KIND[kind]}</b><div>{fix}</div>{x.status === 'open' && <div className="no" style={{ marginTop: 3 }}>{OPEN_NOTE}</div>}</td>
+          </tr>);
+        })}
+      </tbody>
+    </table></div>
+    <p className="small muted" style={{ marginTop: 8 }}>تفصيل ما تغيّر بين التشغيلات وقراءة الإخفاقات الباقية في docs/EVALUATION.md في المستودع. نص كل إجابة ومقارنتها بالنموذج العام في تبويبات التشغيلات أعلاه.</p>
+  </>);
+}
+
 /** Published evaluation: Munir against a general model with no sources, on the same 150 synthetic questions. */
 export default function EvalPage() {
   const [d, setD] = useState<any>(null); const [err, setErr] = useState(false);
-  const [split, setSplit] = useState<'final' | 'holdout' | 'holdout_after' | 'dev' | 'all'>('holdout'); const [filter, setFilter] = useState<'all' | 'fail'>('all'); const [open, setOpen] = useState<string | null>(null);
+  const [split, setSplit] = useState<'final' | 'holdout' | 'holdout_after' | 'dev' | 'all' | 'errors'>('holdout'); const [filter, setFilter] = useState<'all' | 'fail'>('all'); const [open, setOpen] = useState<string | null>(null);
   useEffect(() => { document.documentElement.lang = 'ar'; document.documentElement.dir = 'rtl'; fetch('/api/eval/results').then(r => r.ok ? r.json() : Promise.reject()).then(x => { setD(x); if (x?.final?.munir_runs > 0) setSplit('final'); }).catch(() => setErr(true)); }, []);
-  const after = split === 'holdout_after'; const fin = split === 'final';
+  const after = split === 'holdout_after'; const fin = split === 'final'; const reg = split === 'errors';
   const hasFinal = (d?.final?.munir_runs ?? 0) > 0;
   // The final version and the re-run read their own stored run of the same held-out questions.
   const rows = useMemo(() => (d?.cases ?? []).filter((c: any) => (split === 'all' || c.split === (after || fin ? 'holdout' : split)))
@@ -31,9 +118,10 @@ export default function EvalPage() {
       <p className="small muted" dir="ltr" style={{ textAlign: 'right' }}>generate: {d.models.generate} · verify: {d.models.verify} · baseline: {d.models.baseline}</p>
 
       <nav className="tabs">
-        {([...(hasFinal ? (['final'] as const) : []), 'holdout', 'holdout_after', 'dev', 'all'] as const).map(k => <button key={k} className="chip" aria-pressed={split === k} onClick={() => setSplit(k)}>{k === 'final' ? 'النسخة النهائية' : k === 'holdout' ? 'المحجوبة: التشغيل الأول (120)' : k === 'holdout_after' ? 'المحجوبة: بعد الإصلاح' : k === 'dev' ? 'الضبط (30)' : 'الكل (150)'}</button>)}
+        {([...(hasFinal ? (['final'] as const) : []), 'holdout', 'holdout_after', 'dev', 'all', 'errors'] as const).map(k => <button key={k} className="chip" aria-pressed={split === k} onClick={() => setSplit(k)}>{k === 'errors' ? 'سجل الأخطاء ومعالجتها' : k === 'final' ? 'النسخة النهائية' : k === 'holdout' ? 'المحجوبة: التشغيل الأول (120)' : k === 'holdout_after' ? 'المحجوبة: بعد الإصلاح' : k === 'dev' ? 'الضبط (30)' : 'الكل (150)'}</button>)}
       </nav>
 
+      {reg ? <Register d={d} /> : (<>
       <p className="small muted" style={{ marginBottom: 10 }}>{fin ? 'تشغيل على النسخة النهائية بعد تحسينات بُنيت على مراجعة إخفاقات التشغيلين السابقين. الأسئلة لم تعد محجوبة عن الفريق، فهذا قياس للنسخة الحالية لا اختبار أعمى؛ التشغيل الأول يبقى القياس الأعمى الوحيد.' : split === 'holdout' ? 'تشغيل واحد على الأسئلة المحجوبة والإعدادات مجمّدة، قبل أي اطلاع على نتائجها. هذا هو القياس النظيف.' : after ? 'إعادة تشغيل على الأسئلة نفسها بعد إصلاحات كشفها التشغيل الأول (إعادة المحاولة عند حد المعدل لدى المزوّد، وقاعدة أوضح للحالات الشخصية). لم تعد الأسئلة محجوبة عن الفريق، فتُقرأ هذه الأرقام مع هذا القيد.' : split === 'dev' ? 'الأسئلة التي ضُبطت عليها العتبات والتعليمات.' : 'كل الأسئلة، بالتشغيل الأول لكل منها.'}</p>
       {none ? <div className="card center muted">لم يُشغَّل التقييم على هذه المجموعة بعد.</div> : (<>
         <div className="grid2">
@@ -47,7 +135,7 @@ export default function EvalPage() {
         </div>
 
         <h2 className="pg">منير مقابل نموذج عام بلا مصادر</h2>
-        <div className="tablewrap"><table className="t">
+        <div className="tablewrap" tabIndex={0} role="region" aria-label="جدول النتائج"><table className="t">
           <thead><tr><th>المقياس</th><th>منير</th><th>النموذج العام</th></tr></thead>
           <tbody>
             <tr><td>عبارات لا يسندها نص من المصادر (بحكم نموذج مستقل)</td><td className="ok">{pct(s.munir.unsupported_claim_rate)}</td><td className="no">{pct(s.baseline.unsupported_claim_rate)}</td></tr>
@@ -68,7 +156,7 @@ export default function EvalPage() {
 
       <h2 className="pg">الأسئلة واحداً واحداً</h2>
       <nav className="tabs"><button className="chip" aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>الكل</button><button className="chip" aria-pressed={filter === 'fail'} onClick={() => setFilter('fail')}>الإخفاقات فقط</button></nav>
-      <div className="tablewrap"><table className="t">
+      <div className="tablewrap" tabIndex={0} role="region" aria-label="جدول النتائج"><table className="t">
         <thead><tr><th>#</th><th>السؤال</th><th>الفئة</th><th>المتوقع</th><th>تصرف منير</th><th /></tr></thead>
         <tbody>{rows.map((c: any) => (<Fragment key={c.id}>
           <tr>
@@ -85,6 +173,7 @@ export default function EvalPage() {
           )}
         </Fragment>))}</tbody>
       </table></div>
+      </>)}
     </div></main>
   );
 }

@@ -92,10 +92,10 @@ export default function Notebook() {
         <h3 className="sec">{t(lang, 'nb_ask')}</h3>
         <AskBox lang={lang} value={text} onChange={setText} onAsk={() => ask(text)} onAudio={askAudio} onError={asker.fail} busy={asker.busy || !online} />
         {asker.error && <div className="err" role="alert">{t(lang, asker.error)}</div>}
-        {asker.busy && <div className="stage" role="status" aria-live="polite"><span className="spin" />{t(lang, `st_${asker.stage ?? 'understand'}`)}</div>}
+        {asker.busy && <div className="stage" role="status" aria-live="polite"><span className="spin" aria-hidden="true" />{t(lang, `st_${asker.stage ?? 'understand'}`)}</div>}
       </section>
 
-      {pending > 0 && <p className="notice">{t(lang, 'nb_pending')}: {pending}</p>}
+      {pending > 0 && <p className="notice" role="status">{t(lang, 'nb_pending')}: {pending}</p>}
       {items.length === 0 && !asker.busy && !asker.answer && <div className="card center muted">{t(lang, 'nb_empty')}</div>}
 
       {/* The answer just received is shown at once, whether or not the saved list has caught up. */}
@@ -103,7 +103,7 @@ export default function Notebook() {
         <AnswerCard a={asker.answer} question={asker.question}>
           {asker.answer.tier === 'clarify' && (
             <div className="rowbtns">
-              <input className="in" style={{ flex: 1, minWidth: 160 }} value={clar} onChange={e => setClar(e.target.value)} placeholder={t(asker.answer.lang, 'clarify_ph')} dir="auto" onKeyDown={e => { if (e.key === 'Enter') sendClarification(); }} />
+              <input className="in" style={{ flex: 1, minWidth: 160 }} value={clar} onChange={e => setClar(e.target.value)} placeholder={t(asker.answer.lang, 'clarify_ph')} aria-label={t(asker.answer.lang, 'clarify_ph')} dir="auto" onKeyDown={e => { if (e.key === 'Enter') sendClarification(); }} />
               <button className="btn sm" onClick={sendClarification}>{t(asker.answer.lang, 'send')}</button>
             </div>
           )}

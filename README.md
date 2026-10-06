@@ -13,6 +13,21 @@
 | نتائج التقييم المنشورة | https://munir-one.vercel.app/eval |
 | فحص حي للنماذج وقاعدة البيانات | https://munir-one.vercel.app/api/health?deep=1 |
 
+## أعد الاختبار بنفسك في خمس دقائق
+
+| الخطوة | أين | ما تراه |
+|---|---|---|
+| 1. اسأل | https://munir-one.vercel.app | سؤال بالصوت أو الكتابة بأي من اللغات السبع، وإجابة بمصدرها أو إحالة صريحة |
+| 2. جرّب المواقف الجاهزة | [/demo](https://munir-one.vercel.app/demo) | مواقف معدّة: كلمة سُمعت خطأ، سؤال بالعامية، إجابة من مصدر، فتوى منشورة، حالة شخصية تُحال، سؤال خارج النطاق، وأسئلة باللغات الأخرى |
+| 3. اقرأ النتائج والأخطاء | [/eval](https://munir-one.vercel.app/eval) | نتائج 150 سؤالاً واحداً واحداً، وتبويب «سجل الأخطاء ومعالجتها»: كل إخفاق، وما تغيّر بسببه، وحاله الآن |
+| 4. افحص الخدمة | [/api/health?deep=1](https://munir-one.vercel.app/api/health?deep=1) | نداء حي لكل نموذج ولقاعدة البيانات |
+| 5. شغّل الكود عندك بلا مفاتيح | `npm install` ثم `MUNIR_MOCK=1 npm run dev` | التطبيق كاملاً بنماذج بديلة ثابتة وقاعدة بيانات في الذاكرة |
+| 6. شغّل الاختبارات | `npm test` | 50 اختباراً آلياً لبوابات المسار والاستشهاد والمعجم والرموز |
+
+**إعادة تشغيل التقييم.** من `/specialist`، تبويب «التقييم»، بعد إدخال رمز المتخصص: تُختار المجموعة وعدد التشغيلات، وتُحفظ النتائج وتظهر في `/eval` مباشرة. التشغيل يكتب فوق النتائج المخزنة بالرقم نفسه، فالأنسب أن يُعاد على نسخة تنشرها أنت (الخطوات في «Run it» أدناه) حتى يبقى التشغيل الأعمى الأول المنشور كما هو.
+
+**ما أُنجز وما هو مقترح** مفصولان في [docs/OPERATIONS.md](docs/OPERATIONS.md)، ومعه تكلفة التشغيل والاعتمادات وبدائلها وخطة الصيانة والتبنّي. إتاحة الخدمة للمكفوفين وضعاف البصر في [docs/ACCESSIBILITY.md](docs/ACCESSIBILITY.md).
+
 ## المشكلة
 
 الحاج يسأل في لحظة النسك، بلغته، ويحتاج جواباً يثق به الآن. المتاح أمامه: مرشد لا يتكلم لغته أو غير موجود في تلك الساعة، أو نموذج ذكاء اصطناعي عام يجيب بثقة من ذاكرته بلا مصدر، ويفتي في حالات شخصية لا يصح أن يفتي فيها.
@@ -140,7 +155,7 @@ scripts              PDF extraction and source-pack builder
 ```bash
 npm install
 MUNIR_MOCK=1 npm run dev        # no keys, no network: canned models and an in-memory database
-npm test && npm run typecheck   # 49 unit tests: masking, citation enforcement, fusion, tokens, claims, pipeline gates
+npm test && npm run typecheck   # 50 unit tests: masking, citation enforcement, fusion, tokens, claims, pipeline gates
 ```
 
 **Kiosk.** Open the service point as `/?k=<point-id>`. Hands-free listening starts by itself when the browser already holds the microphone permission; for a fully touch-free kiosk start Chrome with `--kiosk --autoplay-policy=no-user-gesture-required` and grant the microphone to the site once. Without that, one tap on the microphone starts it.
