@@ -158,17 +158,23 @@ export async function ask(input: AskInput, onStage: StageCb = () => {}): Promise
     const draft = async (ctx: Retrieved) => {
       const allowed = new Set(ctx.chunks.map(c => c.id));
       const texts = new Map(ctx.chunks.map(c => [c.id, c.text]));
-      let problems: string[] = [];
+      let problems: string[] = []; let unavailable = false;
       for (let attempt = 0; attempt < 2; attempt++) {
         let g: Gen;
         // A malformed draft is a failed attempt, not a crash.
         try { g = await generate(u.q_en, ctx.chunks, { personal: u.personal_case, clarified: !!input.clarified || !!explain, feedback: attempt ? problems.join('; ') : undefined, explain: explain ?? undefined }); }
-        catch (e) { problems = [`invalid output: ${String((e as Error).message).slice(0, 80)}`]; continue; }
+        catch (e) {
+          // The composer's provider failed (rate limit, timeout) or returned something unreadable: one more try after a short pause.
+          problems = [`invalid output: ${String((e as Error).message).slice(0, 80)}`]; unavailable = true;
+          if (!attempt) await new Promise(res => setTimeout(res, 1500));
+          continue;
+        }
+        unavailable = false;
         const chk = enforceCitations(g, allowed, texts);
-        if (chk.ok || !g.answerable) return { gen: g as Gen | null, problems: [] as string[], quotes: { matched: chk.quoted, unmatched: chk.unquoted } };
+        if (chk.ok || !g.answerable) return { gen: g as Gen | null, problems: [] as string[], quotes: { matched: chk.quoted, unmatched: chk.unquoted }, unavailable: false };
         problems = chk.problems;
       }
-      return { gen: null as Gen | null, problems, quotes: null };
+      return { gen: null as Gen | null, problems, quotes: null, unavailable };
     };
     const mayClarify = !explain && !input.clarified && !u.personal_case;
     const abstained = (g: Gen | null) => !!g && !(g.clarify && mayClarify) && (!g.answerable || g.claims.length + g.cases.length === 0);
@@ -185,7 +191,8 @@ export async function ask(input: AskInput, onStage: StageCb = () => {}): Promise
     const chunkIds = r.chunks.map(c => c.id);
     traceRetrieved();
     if (!explain && input.trace) { input.trace.generated = d.gen; input.trace.citation_problems = d.problems; }
-    if (!d.gen) { fl.citation_problems = d.problems; return fail('citation_enforcement_failed', chunkIds); }
+    // A draft that broke the citation rules twice and a composer that could not be reached are different failures, and are recorded as such.
+    if (!d.gen) { fl.citation_problems = d.problems; return fail(d.unavailable ? 'model_unavailable' : 'citation_enforcement_failed', chunkIds); }
     const g = d.gen; fl.quotes = d.quotes;
     if (g.clarify && mayClarify) return fail('clarify', chunkIds, g.clarify);
     if (!g.answerable || g.claims.length + g.cases.length === 0) return fail('generator_abstained', chunkIds);

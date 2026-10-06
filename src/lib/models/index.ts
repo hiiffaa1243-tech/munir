@@ -10,9 +10,12 @@ export class ModelError extends Error { constructor(public provider: string, pub
 // A single model call may not outlive the request: the function limit is 60 s and a question makes several calls.
 const TIMEOUT_MS = 22_000;
 
-async function post(url: string, headers: Record<string, string>, body: unknown, provider: string): Promise<any> {
+// The verifier's provider gets a shorter leash: when it stalls, the next candidate (or the declared fallback) takes
+// over while the visitor is still waiting, instead of after the whole budget is gone.
+const GOOGLE_TIMEOUT_MS = 12_000;
+async function post(url: string, headers: Record<string, string>, body: unknown, provider: string, timeoutMs = TIMEOUT_MS): Promise<any> {
   const ctl = new AbortController();
-  const t = setTimeout(() => ctl.abort(), TIMEOUT_MS);
+  const t = setTimeout(() => ctl.abort(), timeoutMs);
   try {
     const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body), signal: ctl.signal });
     const text = await r.text();
@@ -65,7 +68,7 @@ async function chatGoogle(rc: RoleConfig, msgs: ChatMsg[], json: boolean, maxTok
   if (sys) body.systemInstruction = { parts: [{ text: sys }] };
   let d: any;
   try {
-    d = await post(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(rc.model)}:generateContent`, { 'x-goog-api-key': config.keys.google }, body, 'google');
+    d = await post(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(rc.model)}:generateContent`, { 'x-goog-api-key': config.keys.google }, body, 'google', GOOGLE_TIMEOUT_MS);
   } catch (e) {
     if (think && e instanceof ModelError && e.status === 400 && /thinking/i.test(e.message)) { noThinkCfg.add(rc.model); return chatGoogle(rc, msgs, json, maxTokens, level); }
     throw e;
