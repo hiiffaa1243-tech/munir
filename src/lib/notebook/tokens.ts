@@ -13,6 +13,18 @@ export function makeClaimToken(sessionId: string, ttlMs = 10 * 60_000, now = Dat
   return { token: `${body}.${sign(body)}`, payload };
 }
 
+// A claim covers exactly one answer. Its scope is stored in the free-text `claims.session_id` column and in the
+// token's `sid` as "i:<interaction id>". A scope without that prefix is a legacy whole-session claim and is refused.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const claimScope = (interactionId: string): string => `i:${interactionId}`;
+/** The interaction a claim scope covers, or null when the scope is not a single-answer scope. */
+export function scopeInteraction(scope: unknown): string | null {
+  if (typeof scope !== 'string' || !scope.startsWith('i:')) return null;
+  const id = scope.slice(2);
+  return UUID_RE.test(id) ? id.toLowerCase() : null;
+}
+export const CLAIMABLE_MS = 30 * 60_000;   // an answer can be claimed for half an hour after it was given
+
 export function readClaimToken(token: string, now = Date.now()): ClaimPayload | null {
   const [body, sig] = token.split('.');
   if (!body || !sig) return null;

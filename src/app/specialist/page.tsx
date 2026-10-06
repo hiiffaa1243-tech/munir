@@ -1,12 +1,27 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { GLOSSARY, GLOSSARY_VERSION } from '@/lib/glossary/data';
+import './specialist.css';
 
 type Tab = 'queue' | 'answers' | 'sources' | 'glossary' | 'eval';
 interface Group { key: string; q_ar: string | null; q_en: string | null; sample: string; ticket_ids: string[]; langs: Record<string, number>; latest: string }
 interface VA { id: string; code: string | null; q_canon: string; q_ar: string | null; answer: string; source_title: string; source_locator: string | null; author_name: string; status: string; created_at: string }
 interface Src { id: string; title: string; author: string | null; publisher: string | null; pages: number | null; active: boolean; chunks: number }
 interface EvalCase { id: string; split: string; tier: string | null }
+interface Stats { open: number; groups: number; langs: Record<string, number>; published: number | null }
+
+// What POST /api/specialist/assist returns: evidence that code matched to its passage, a draft, and what the sources leave open.
+type Kind = 'quran' | 'hadith' | 'scholar' | 'text';
+interface Evidence { n: number; kind: Kind; quote: string; note_ar: string; title: string; author: string | null; page: number | null; url: string | null; chunk_id: string }
+interface Draft { ruling_ar: string; cases_ar: { condition: string; ruling: string }[]; spoken_ar: string; disagreement: boolean }
+interface Related { code: string | null; question: string; answer: string; locator: string; similarity: number }
+interface Assist { draft: Draft | null; evidence: Evidence[]; gaps: string[]; related: Related[]; unmatched: number; passages: number; model: string | null }
+
+const NAME_KEY = 'munir_sp_name';
+const QUOTE_MAX = 4000;   // the publish route's limit on the supporting text
+const LANG_AR: Record<string, string> = { ar: 'العربية', en: 'الإنجليزية', ur: 'الأردية', id: 'الإندونيسية', fr: 'الفرنسية', hi: 'الهندية', zh: 'الصينية', tr: 'التركية', bn: 'البنغالية' };
+const KIND_AR: Record<Kind, string> = { quran: 'آية', hadith: 'حديث', scholar: 'قول أهل العلم', text: 'نص' };
+const langName = (l: string) => LANG_AR[l] ?? l;
 
 const api = async (url: string, init?: RequestInit) => {
   const r = await fetch(url, { ...init, headers: { 'content-type': 'application/json', ...(init?.headers ?? {}) } });
@@ -14,15 +29,33 @@ const api = async (url: string, init?: RequestInit) => {
   return { ok: r.ok, status: r.status, d };
 };
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+const when = (iso: string) => { try { return new Date(iso).toLocaleString('ar-u-nu-latn', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch { return ''; } };
 
-/** The approved Sharia specialist's workspace: one-step answers, sources, terminology and evaluation. */
+/** The approved Sharia specialist's workspace: referred questions, assisted drafting, sources, terminology and evaluation. */
 export default function Specialist() {
   const [auth, setAuth] = useState<'unknown' | 'no' | 'yes'>('unknown');
   const [pass, setPass] = useState(''); const [loginErr, setLoginErr] = useState('');
   const [tab, setTab] = useState<Tab>('queue');
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [name, setName] = useState('');
 
   const check = useCallback(async () => { const r = await api('/api/specialist/queue'); setAuth(r.ok ? 'yes' : 'no'); return r; }, []);
-  useEffect(() => { document.documentElement.lang = 'ar'; document.documentElement.dir = 'rtl'; check(); }, [check]);
+  useEffect(() => {
+    document.documentElement.lang = 'ar'; document.documentElement.dir = 'rtl'; check();
+    try { setName(localStorage.getItem(NAME_KEY) ?? ''); } catch { /* ignore */ }
+  }, [check]);
+  // The specialist's name is kept on this device, so each answer carries it without retyping.
+  const saveName = useCallback((n: string) => { setName(n); try { localStorage.setItem(NAME_KEY, n); } catch { /* ignore */ } }, []);
+  const refresh = useCallback(async () => {
+    try {
+      const [q, a] = await Promise.all([api('/api/specialist/queue'), api('/api/specialist/answers')]);
+      if (!q.ok) return;
+      const groups: Group[] = q.d.groups ?? []; const langs: Record<string, number> = {};
+      for (const g of groups) for (const [l, n] of Object.entries(g.langs)) langs[l] = (langs[l] ?? 0) + n;
+      setStats({ open: q.d.total ?? 0, groups: groups.length, langs, published: a.ok ? ((a.d.answers ?? []) as VA[]).filter(v => v.status === 'published').length : null });
+    } catch { /* the figures are a convenience */ }
+  }, []);
+  useEffect(() => { if (auth === 'yes') refresh(); }, [auth, refresh]);
 
   async function login() {
     setLoginErr('');
@@ -45,15 +78,25 @@ export default function Specialist() {
   );
 
   const tabs: [Tab, string][] = [['queue', 'الأسئلة المحالة'], ['answers', 'الإجابات المعتمدة'], ['sources', 'المصادر'], ['glossary', 'معجم المصطلحات'], ['eval', 'التقييم']];
+  const askLangs = stats ? Object.keys(stats.langs).sort((a, b) => stats.langs[b] - stats.langs[a]) : [];
   return (
     <main><div className="wrap wide">
       <header className="top">
-        <div className="brand"><b>منير</b><span>لوحة المتخصص الشرعي</span></div>
-        <div className="rowbtns" style={{ marginTop: 0 }}><a className="btn sm ghost" href="/">نقطة الخدمة</a><a className="btn sm ghost" href="/insights">المؤشرات</a><button className="btn sm ghost" onClick={logout}>خروج</button></div>
+        <div className="brand"><b>منير</b><h1 className="sp-title">لوحة المتخصص الشرعي</h1></div>
+        <div className="rowbtns" style={{ marginTop: 0 }}>
+          <span className="sp-author">المجيب: <b dir="auto">{name.trim() || 'لم يُسجَّل الاسم بعد'}</b></span>
+          <a className="btn sm ghost" href="/">نقطة الخدمة</a><a className="btn sm ghost" href="/insights">المؤشرات</a><button className="btn sm ghost" onClick={logout}>خروج</button>
+        </div>
       </header>
+      <p className="sp-rule">المتخصص هو صاحب الجواب. المساعد يجمع الأدلة من المصادر المعتمدة ويقترح الصياغة، ولا يُنشر شيء إلا بمراجعته وتحقق مستقل.</p>
+      <div className="sp-stats">
+        <div className="sp-stat"><div className="k">أسئلة محالة مفتوحة</div><div className="v">{stats ? stats.open : '—'}</div><div className="s">{stats ? (stats.open ? `عدد المسائل بعد جمع المتطابق: ${stats.groups}` : 'لا أسئلة تنتظر الآن') : ''}</div></div>
+        <div className="sp-stat"><div className="k">إجابات منشورة</div><div className="v">{stats?.published ?? '—'}</div><div className="s">تصل إلى كل سؤال مطابق، بكل اللغات</div></div>
+        <div className="sp-stat"><div className="k">لغات السائلين</div><div className="v">{stats ? askLangs.length : '—'}</div><div className="s">{askLangs.length ? askLangs.map(langName).join('، ') : ''}</div></div>
+      </div>
       <nav className="tabs">{tabs.map(([k, label]) => <button key={k} className="chip" aria-pressed={tab === k} onClick={() => setTab(k)}>{label}</button>)}</nav>
-      {tab === 'queue' && <Queue />}
-      {tab === 'answers' && <Answers />}
+      {tab === 'queue' && <Queue name={name} onName={saveName} onChanged={refresh} />}
+      {tab === 'answers' && <Answers onChanged={refresh} />}
       {tab === 'sources' && <Sources />}
       {tab === 'glossary' && <Glossary />}
       {tab === 'eval' && <Evaluation />}
@@ -61,26 +104,32 @@ export default function Specialist() {
   );
 }
 
-// ---------- referred questions and the one-step answer form ----------
-function Queue() {
+// ---------- referred questions, the one-step answer form and the drafting assistant ----------
+function Queue({ name, onName, onChanged }: { name: string; onName: (n: string) => void; onChanged: () => void }) {
   const [groups, setGroups] = useState<Group[]>([]); const [total, setTotal] = useState(0);
-  const [open, setOpen] = useState<Group | 'new' | null>(null);
+  // `id` changes on every opening, so the form starts clean each time.
+  const [open, setOpen] = useState<{ g: Group | null; assist: boolean; id: number } | null>(null);
   const load = useCallback(async () => { const r = await api('/api/specialist/queue'); if (r.ok) { setGroups(r.d.groups ?? []); setTotal(r.d.total ?? 0); } }, []);
   useEffect(() => { load(); }, [load]);
+  const start = (g: Group | null, assist: boolean) => setOpen(p => ({ g, assist, id: (p?.id ?? 0) + 1 }));
   return (
     <section>
       <p className="lead">كل سؤال لم يجد منير له سنداً كافياً في المصادر يصل إلى هنا. الأسئلة المتطابقة تُجمع، فإجابة واحدة تصل إلى كل من سأل، كلٌّ بلغته.</p>
-      <div className="rowbtns"><span className="pill v">تذاكر مفتوحة: {total}</span><button className="btn sm ghost" onClick={load}>تحديث</button><button className="btn sm" onClick={() => setOpen('new')}>إضافة إجابة معتمدة جديدة</button></div>
-      {open && <AnswerForm group={open === 'new' ? null : open} onClose={() => setOpen(null)} onDone={() => { setOpen(null); load(); }} />}
+      <div className="rowbtns"><span className="pill v">تذاكر مفتوحة: {total}</span><button className="btn sm ghost" onClick={() => { load(); onChanged(); }}>تحديث</button><button className="btn sm ghost" onClick={() => start(null, false)}>إضافة إجابة معتمدة جديدة</button></div>
+      {open && <AnswerForm key={open.id} group={open.g} assist={open.assist} name={name} onName={onName} onClose={() => setOpen(null)} onDone={() => { setOpen(null); load(); onChanged(); }} />}
       {groups.length === 0 && <div className="card center muted">لا توجد أسئلة محالة الآن.</div>}
       {groups.map(g => (
-        <div className="card" key={g.key}>
-          <div style={{ fontWeight: 600 }}>{g.q_ar || g.q_en || g.sample}</div>
-          <div className="muted small" dir="auto">النص الأصلي: {g.sample}</div>
-          <div className="rowbtns">
+        <div className={`sp-ref${open?.g?.key === g.key ? ' on' : ''}`} key={g.key}>
+          <div className="qt" dir="auto">{g.q_ar || g.q_en || g.sample}</div>
+          <div className="orig">النص كما ورد: <bdi>{g.sample}</bdi></div>
+          <div className="meta">
             <span className="pill">عدد السائلين: {g.ticket_ids.length}</span>
-            {Object.entries(g.langs).map(([l, n]) => <span className="pill" key={l}>{l} × {n}</span>)}
-            <button className="btn sm" onClick={() => setOpen(g)}>أجب</button>
+            {Object.entries(g.langs).map(([l, n]) => <span className="pill" key={l}>{langName(l)} × {n}</span>)}
+            {g.latest && <span>آخر ورود: {when(g.latest)}</span>}
+          </div>
+          <div className="acts">
+            <button className="btn sm" onClick={() => start(g, true)}>تجهيز مسودة بمساعدة الذكاء الاصطناعي</button>
+            <button className="btn sm ghost" onClick={() => start(g, false)}>أجب</button>
           </div>
         </div>
       ))}
@@ -88,45 +137,214 @@ function Queue() {
   );
 }
 
-function AnswerForm({ group, onClose, onDone }: { group: Group | null; onClose: () => void; onDone: () => void }) {
-  const [f, setF] = useState({ question: group ? (group.q_ar || group.q_en || group.sample) : '', answer: '', source_title: '', source_locator: '', source_quote: '', author_name: '' });
+type AssistState = { state: 'idle' | 'loading' | 'error' | 'done'; data?: Assist; err?: string };
+
+/** Source title and page for the form, from the evidence the scholar took. Pages are given only when one book is involved. */
+function sourceLabel(es: Evidence[]): { title: string; loc: string } {
+  const titles = [...new Set(es.map(e => e.title).filter(Boolean))];
+  const pages = [...new Set(es.map(e => e.page).filter((p): p is number => p != null))].sort((a, b) => a - b);
+  return { title: titles.join(' ؛ ').slice(0, 300), loc: titles.length === 1 && pages.length ? pages.map(p => `ص ${p}`).join('، ') : '' };
+}
+
+function AnswerForm({ group, assist, name, onName, onClose, onDone }: { group: Group | null; assist: boolean; name: string; onName: (n: string) => void; onClose: () => void; onDone: () => void }) {
+  const [f, setF] = useState({ question: group ? (group.q_ar || group.q_en || group.sample) : '', answer: '', source_title: '', source_locator: '', source_quote: '' });
   const [busy, setBusy] = useState(false); const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  useEffect(() => { try { const n = localStorage.getItem('munir_sp_name'); if (n) setF(p => ({ ...p, author_name: n })); } catch { /* ignore */ } }, []);
+  const [ai, setAi] = useState<AssistState>({ state: 'idle' });
+  const [sec, setSec] = useState(0); const [fromDraft, setFromDraft] = useState(false); const [hint, setHint] = useState('');
+  const seq = useRef(0); const box = useRef<HTMLDivElement>(null);
+  const auto = useRef({ title: '', loc: '' });   // what the assistant last filled in; the scholar's own typing is never overwritten
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF(p => ({ ...p, [k]: e.target.value }));
-  const ready = f.question.trim().length >= 5 && f.answer.trim().length >= 10 && f.source_title.trim().length >= 2 && f.source_quote.trim().length >= 10 && f.author_name.trim().length >= 2;
+  const ready = f.question.trim().length >= 5 && f.answer.trim().length >= 10 && f.source_title.trim().length >= 2 && f.source_quote.trim().length >= 10 && name.trim().length >= 2;
+
+  // The assistant only prepares material for this form. A newer request, or closing the form, discards an older reply.
+  const run = useCallback(async (question: string) => {
+    const q = question.trim().slice(0, 800); if (q.length < 5) return;
+    const id = ++seq.current; setAi({ state: 'loading' }); setHint('');
+    const r = await api('/api/specialist/assist', { method: 'POST', body: JSON.stringify({ question: q }) }).catch(() => ({ ok: false, status: 0, d: {} as any }));
+    if (id !== seq.current) return;
+    if (!r.ok || !r.d?.ok) {
+      setAi({ state: 'error', err: r.status === 401 ? 'انتهت الجلسة. سجّل الدخول من جديد ثم أعد المحاولة.' : r.status === 429 ? 'طلبات كثيرة في وقت قصير. انتظر دقيقة ثم أعد المحاولة.' : 'تعذر تجهيز المسودة الآن. أعد المحاولة، أو اكتب الجواب مباشرة فالنشر لا يتوقف على المساعد.' });
+      return;
+    }
+    const d = r.d;
+    setAi({ state: 'done', data: { draft: d.draft ?? null, evidence: Array.isArray(d.evidence) ? d.evidence : [], gaps: Array.isArray(d.gaps) ? d.gaps : [], related: Array.isArray(d.related) ? d.related : [], unmatched: Number(d.unmatched) || 0, passages: Number(d.passages) || 0, model: d.model ?? null } });
+  }, []);
+  useEffect(() => {
+    box.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (assist) run(group ? (group.q_ar || group.q_en || group.sample) : '');
+    return () => { seq.current++; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (ai.state !== 'loading') return;
+    setSec(0); const t = setInterval(() => setSec(s => s + 1), 1000);
+    return () => clearInterval(t);
+  }, [ai.state]);
+
   async function submit() {
     setBusy(true); setMsg(null);
-    try { localStorage.setItem('munir_sp_name', f.author_name); } catch { /* ignore */ }
-    const r = await api('/api/specialist/answers', { method: 'POST', body: JSON.stringify({ ...f, ticket_ids: group?.ticket_ids.slice(0, 50) ?? [] }) });
+    const r = await api('/api/specialist/answers', { method: 'POST', body: JSON.stringify({ ...f, author_name: name, ticket_ids: group?.ticket_ids.slice(0, 50) ?? [] }) });
     setBusy(false);
     if (!r.ok) { setMsg({ ok: false, text: r.d.error ?? 'تعذر الحفظ.' }); return; }
     if (r.d.published) { setMsg({ ok: true, text: `نُشرت الإجابة. وصلت إلى ${r.d.resolved_tickets} من السائلين، وستُستخدم لكل سؤال مطابق لاحقاً.` }); setTimeout(onDone, 1800); }
     else setMsg({ ok: false, text: `لم تُنشر: النص المصدري المرفق لا يسند الإجابة كما كُتبت (${r.d.verdict}). ${r.d.reason ?? ''} عدّل الإجابة أو أرفق نصاً أوضح ثم أعد الإرسال.` });
   }
+
+  const inQuote = (e: Evidence) => f.source_quote.includes(e.quote);
+  /** Appends evidence to the supporting text, and names its source when the scholar has not named one himself. */
+  function addEvidence(list: Evidence[]) {
+    let quote = f.source_quote.trim(); let over = false;
+    for (const e of list) {
+      if (quote.includes(e.quote)) continue;
+      const next = quote ? `${quote}\n\n${e.quote}` : e.quote;
+      if (next.length > QUOTE_MAX) { over = true; break; }
+      quote = next;
+    }
+    const label = sourceLabel((ai.data?.evidence ?? []).filter(e => quote.includes(e.quote)));
+    const was = auto.current; auto.current = label;
+    setF(p => ({
+      ...p, source_quote: quote,
+      source_title: !p.source_title.trim() || p.source_title === was.title ? label.title : p.source_title,
+      source_locator: !p.source_locator.trim() || p.source_locator === was.loc ? label.loc : p.source_locator,
+    }));
+    setHint(over ? `بلغ النص المصدري حده (${QUOTE_MAX} حرف)، فلم يُضف ما زاد عليه.` : '');
+  }
+  function takeDraft() {
+    const d = ai.data?.draft; if (!d) return;
+    const text = [d.ruling_ar, d.cases_ar.map(c => `${c.condition}: ${c.ruling}`).join('\n')].filter(Boolean).join('\n\n').slice(0, 4000);
+    if (f.answer.trim() && f.answer.trim() !== text && !window.confirm('في خانة الجواب نص مكتوب. هل تريد أن تحل المسودة محله؟')) return;
+    setF(p => ({ ...p, answer: text })); setFromDraft(true);
+  }
+
   return (
-    <div className="card" style={{ borderColor: 'var(--violet)' }}>
-      <h2 className="pg" style={{ marginTop: 0 }}>إجابة معتمدة</h2>
-      <p className="muted small">خطوة واحدة: تكتب الإجابة وترفق نصها من المصدر. يتحقق نموذج مستقل من أن النص يسند الإجابة، فإن سندها نُشرت فوراً، وإلا عادت إليك مع السبب.</p>
-      <label className="f">السؤال</label><textarea className="in" rows={2} value={f.question} onChange={set('question')} dir="auto" />
-      <label className="f">الإجابة</label><textarea className="in" rows={5} value={f.answer} onChange={set('answer')} dir="auto" />
-      <div className="grid2">
-        <div><label className="f">المصدر</label><input className="in" value={f.source_title} onChange={set('source_title')} placeholder="اسم الكتاب أو الفتوى" dir="auto" /></div>
-        <div><label className="f">الموضع (اختياري)</label><input className="in" value={f.source_locator} onChange={set('source_locator')} placeholder="الجزء والصفحة أو رقم الفتوى" dir="auto" /></div>
+    <div className={`sp-work${ai.state !== 'idle' ? ' two' : ''}`} ref={box}>
+      <div className="card">
+        <div className="sp-formh"><h2 className="pg">إجابة معتمدة</h2><span className="small muted">المجيب: <b dir="auto">{name.trim() || 'يُكتب أدناه'}</b></span></div>
+        <p className="muted small">خطوة واحدة: تكتب الإجابة وترفق نصها من المصدر. يتحقق نموذج مستقل من أن النص يسند الإجابة، فإن سندها نُشرت فوراً، وإلا عادت إليك مع السبب.</p>
+        <label className="f">السؤال</label><textarea className="in" rows={2} value={f.question} onChange={set('question')} dir="auto" />
+        {ai.state === 'idle' && <div className="sp-acts"><button className="sp-btn" onClick={() => run(f.question)} disabled={f.question.trim().length < 5}>تجهيز مسودة بمساعدة الذكاء الاصطناعي</button></div>}
+        <label className="f">الإجابة</label><textarea className="in" rows={7} value={f.answer} onChange={set('answer')} dir="auto" />
+        {fromDraft && <span className="sp-origin">أصل هذا النص مسودة من المساعد. راجعه وعدّله كما ترى قبل النشر.</span>}
+        <div className="grid2">
+          <div><label className="f">المصدر</label><input className="in" value={f.source_title} onChange={set('source_title')} placeholder="اسم الكتاب أو الفتوى" dir="auto" /></div>
+          <div><label className="f">الموضع (اختياري)</label><input className="in" value={f.source_locator} onChange={set('source_locator')} placeholder="الجزء والصفحة أو رقم الفتوى" dir="auto" /></div>
+        </div>
+        <label className="f sp-flabel"><span>النص المصدري الذي يسند الإجابة (إلزامي)</span><span className="c" dir="ltr">{f.source_quote.length} / {QUOTE_MAX}</span></label>
+        <textarea className="in" rows={6} value={f.source_quote} onChange={set('source_quote')} dir="auto" maxLength={QUOTE_MAX} />
+        {hint && <span className="sp-origin" role="status">{hint}</span>}
+        <label className="f">المجيب (اسم المتخصص الشرعي)</label><input className="in" value={name} onChange={e => onName(e.target.value)} dir="auto" />
+        {msg && <div className={msg.ok ? 'resolved' : 'err'} role="status">{msg.text}</div>}
+        <div className="rowbtns"><button className="btn" onClick={submit} disabled={!ready || busy}>{busy ? 'جارٍ التحقق…' : 'تحقق وانشر'}</button><button className="btn ghost" onClick={onClose}>إلغاء</button></div>
       </div>
-      <label className="f">النص المصدري الذي يسند الإجابة (إلزامي)</label><textarea className="in" rows={4} value={f.source_quote} onChange={set('source_quote')} dir="auto" />
-      <label className="f">اسم المتخصص الشرعي</label><input className="in" value={f.author_name} onChange={set('author_name')} dir="auto" />
-      {msg && <div className={msg.ok ? 'resolved' : 'err'} role="status">{msg.text}</div>}
-      <div className="rowbtns"><button className="btn" onClick={submit} disabled={!ready || busy}>{busy ? 'جارٍ التحقق…' : 'تحقق وانشر'}</button><button className="btn ghost" onClick={onClose}>إلغاء</button></div>
+
+      {ai.state !== 'idle' && (
+        <aside className="sp-asst" aria-label="مساعد المتخصص">
+          <div className="sp-asst-h">
+            <div className="t"><b>مساعد المتخصص</b><span className="sp-acts" style={{ marginTop: 0 }}><span className="sp-tag">مسودة آلية</span><button className="sp-btn" onClick={() => run(f.question)} disabled={ai.state === 'loading' || f.question.trim().length < 5}>إعادة التجهيز</button></span></div>
+            <p>مسودة من المساعد، من المصادر المعتمدة فقط. الاقتباسات طابقها الكود حرفياً على نصوصها. تُراجَع قبل النشر.</p>
+          </div>
+          <div className="sp-asst-b">
+            {ai.state === 'loading' && (
+              <div className="sp-wait" role="status">
+                <div className="l"><span className="spin" />أبحث في المصادر المعتمدة، ثم أصوغ المسودة</div>
+                <div className="s">يستغرق ذلك عادةً من عشر ثوانٍ إلى عشرين. مضى <span dir="ltr">{sec}</span> ث. يمكنك الكتابة في النموذج أثناء الانتظار.</div>
+                <div className="sp-bar"><i /></div>
+              </div>
+            )}
+            {ai.state === 'error' && <div className="sp-sec"><div className="err" role="alert" style={{ marginTop: 0 }}>{ai.err}</div><div className="sp-acts"><button className="sp-btn pri" onClick={() => run(f.question)}>أعد المحاولة</button></div></div>}
+            {ai.state === 'done' && ai.data && <AssistPanel d={ai.data} inQuote={inQuote} onAdd={addEvidence} onUse={takeDraft} used={fromDraft} />}
+          </div>
+        </aside>
+      )}
     </div>
   );
 }
 
+/** What the assistant found and drafted. Everything here is a proposal: it reaches the form only when the scholar takes it. */
+function AssistPanel({ d, inQuote, onAdd, onUse, used }: { d: Assist; inQuote: (e: Evidence) => boolean; onAdd: (list: Evidence[]) => void; onUse: () => void; used: boolean }) {
+  const [spoken, setSpoken] = useState(false); const [copied, setCopied] = useState(false);
+  async function copy(text: string) { try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1600); } catch { /* clipboard not available */ } }
+  const allIn = d.evidence.length > 0 && d.evidence.every(inQuote);
+  return (
+    <>
+      <div className="sp-meta">
+        المقاطع المقروءة من المصادر: {d.passages} · الاقتباسات المطابقة: {d.evidence.length}
+        {d.unmatched > 0 && <> · <span className="x">استُبعد {d.unmatched} اقتباس لم يطابق نصه</span></>}
+        {d.model && <> · <span dir="ltr">{d.model}</span></>}
+      </div>
+
+      <section className="sp-sec">
+        <h3><span>الأدلة من المصادر المعتمدة</span>{d.evidence.length > 1 && <button className={`sp-btn${allIn ? ' done' : ''}`} onClick={() => onAdd(d.evidence)} disabled={allIn}>{allIn ? 'أُضيفت كلها' : 'أضف جميع الأدلة إلى النص المصدري'}</button>}</h3>
+        {d.evidence.length === 0 && <p className="sp-empty">لم يثبت اقتباس مطابق من المصادر المعتمدة لهذا السؤال.</p>}
+        <ol className="sp-evl">{d.evidence.map(e => {
+          const taken = inQuote(e);
+          return (
+            <li className="sp-ev" key={e.n}>
+              <span className="sp-n">{e.n}</span>
+              <div>
+                <div className="sp-evh"><span className={`sp-kind ${e.kind}`}>{KIND_AR[e.kind] ?? KIND_AR.text}</span><span className="sp-match">مطابق لنص المصدر</span></div>
+                <blockquote className="sp-quote" dir="auto">{e.quote}</blockquote>
+                {e.note_ar && <div className="sp-note">{e.note_ar}</div>}
+                <div className="sp-srcline">{[e.title, e.author, e.page != null ? `ص ${e.page}` : null].filter(Boolean).join(' · ')}</div>
+                <div className="sp-acts">
+                  <button className={`sp-btn${taken ? ' done' : ''}`} onClick={() => onAdd([e])} disabled={taken}>{taken ? 'أُضيف إلى النص المصدري' : 'أضف إلى النص المصدري'}</button>
+                  {e.url && /^https?:\/\//i.test(e.url) && <a className="sp-btn" href={e.url} target="_blank" rel="noopener noreferrer">فتح المصدر</a>}
+                </div>
+              </div>
+            </li>
+          );
+        })}</ol>
+      </section>
+
+      <section className="sp-sec">
+        <h3><span>مسودة الجواب</span></h3>
+        {!d.draft && <p className="sp-empty">لم تُقترح مسودة لهذا السؤال. السبب مذكور في «ما لا تحسمه المصادر».</p>}
+        {d.draft && <>
+          <div className="sp-draft" dir="auto">
+            <p>{d.draft.ruling_ar}</p>
+            {d.draft.cases_ar.length > 0 && <ul className="sp-cases">{d.draft.cases_ar.map((c, i) => <li key={i}><b>{c.condition}:</b> {c.ruling}</li>)}</ul>}
+          </div>
+          {d.draft.disagreement && <div className="sp-dis">يوجد خلاف مذكور في المصادر</div>}
+          <div className="sp-acts">
+            <button className={`sp-btn ${used ? 'done' : 'pri'}`} onClick={onUse}>{used ? 'نُقلت إلى خانة الجواب' : 'استخدم المسودة في خانة الجواب'}</button>
+            {d.draft.spoken_ar && <button className="sp-btn" aria-pressed={spoken} onClick={() => setSpoken(s => !s)}>صيغة للإلقاء</button>}
+          </div>
+          {spoken && d.draft.spoken_ar && (
+            <div className="sp-spoken">
+              <div className="h"><span>صيغة للإلقاء على السائل</span><button className={`sp-btn${copied ? ' done' : ''}`} onClick={() => copy(d.draft!.spoken_ar)}>{copied ? 'نُسخت' : 'انسخ'}</button></div>
+              <p dir="auto">{d.draft.spoken_ar}</p>
+            </div>
+          )}
+          <p className="sp-empty" style={{ marginTop: 10 }}>عند النشر يُعرض الجواب على النص المصدري المرفق، فأضف من الأدلة ما يسند كل جملة فيه.</p>
+        </>}
+      </section>
+
+      <section className="sp-sec">
+        <h3><span>ما لا تحسمه المصادر</span><span className="c">يحتاج إلى علم المتخصص</span></h3>
+        {d.gaps.length ? <ul className="sp-gaps">{d.gaps.map((g, i) => <li key={i} dir="auto">{g}</li>)}</ul> : <p className="sp-empty">لم يذكر المساعد مسائل معلّقة. هذا لا يغني عن مراجعتك.</p>}
+      </section>
+
+      <section className="sp-sec">
+        <h3><span>إجابات منشورة قريبة</span></h3>
+        {d.related.length === 0 && <p className="sp-empty">لا توجد إجابة منشورة قريبة من هذا السؤال.</p>}
+        {d.related.map((r, i) => (
+          <div className="sp-rel" key={i}>
+            <div className="h"><span className="pill g">منشورة</span>{r.code && <span className="small" dir="ltr">{r.code}</span>}<span className="qq" dir="auto">{r.question}</span></div>
+            <div className="a" dir="auto">{r.answer.length > 300 ? `${r.answer.slice(0, 300).trimEnd()}…` : r.answer}</div>
+            {r.locator && <div className="l" dir="auto">{r.locator}</div>}
+          </div>
+        ))}
+      </section>
+    </>
+  );
+}
+
 // ---------- verified answers ----------
-function Answers() {
+function Answers({ onChanged }: { onChanged: () => void }) {
   const [rows, setRows] = useState<VA[]>([]); const [q, setQ] = useState('');
   const load = useCallback(async () => { const r = await api('/api/specialist/answers'); if (r.ok) setRows(r.d.answers ?? []); }, []);
   useEffect(() => { load(); }, [load]);
-  async function toggle(v: VA) { await api('/api/specialist/answers', { method: 'PATCH', body: JSON.stringify({ id: v.id, status: v.status === 'published' ? 'withdrawn' : 'published' }) }); load(); }
+  async function toggle(v: VA) { await api('/api/specialist/answers', { method: 'PATCH', body: JSON.stringify({ id: v.id, status: v.status === 'published' ? 'withdrawn' : 'published' }) }); load(); onChanged(); }
   const shown = rows.filter(r => !q || `${r.q_canon} ${r.q_ar ?? ''} ${r.code ?? ''}`.toLowerCase().includes(q.toLowerCase()));
   return (
     <section>

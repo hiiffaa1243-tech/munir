@@ -27,7 +27,9 @@ export const config = {
   geminiThinking: env('GEMINI_THINKING', 'medium'),   // thinking level sent to Gemini 3 models; 'default' sends none
   embedModel: env('EMBED_MODEL', 'text-embedding-3-small'),
   embedDim: 1536,
-  sttModel: env('STT_MODEL', 'whisper-1'),
+  sttModel: env('STT_MODEL', 'gpt-4o-transcribe'),            // final transcripts
+  sttPartialModel: env('STT_PARTIAL_MODEL', 'gpt-4o-mini-transcribe'), // interim captions while the person is still speaking
+  chatSeed: num('CHAT_SEED', 7),                               // fixed sampling seed where the provider supports one (best-effort repeatability)
   ttsModel: env('TTS_MODEL', 'gpt-4o-mini-tts'),
   ttsVoice: env('TTS_VOICE', 'alloy'),
   keys: {

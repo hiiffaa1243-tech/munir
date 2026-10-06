@@ -10,10 +10,15 @@ function Tile({ v, k, sub }: { v: string; k: string; sub?: string }) { return <d
 /** Published evaluation: Munir against a general model with no sources, on the same 150 synthetic questions. */
 export default function EvalPage() {
   const [d, setD] = useState<any>(null); const [err, setErr] = useState(false);
-  const [split, setSplit] = useState<'holdout' | 'holdout_after' | 'dev' | 'all'>('holdout'); const [filter, setFilter] = useState<'all' | 'fail'>('all'); const [open, setOpen] = useState<string | null>(null);
-  useEffect(() => { document.documentElement.lang = 'ar'; document.documentElement.dir = 'rtl'; fetch('/api/eval/results').then(r => r.ok ? r.json() : Promise.reject()).then(setD).catch(() => setErr(true)); }, []);
-  const after = split === 'holdout_after';
-  const rows = useMemo(() => (d?.cases ?? []).filter((c: any) => (split === 'all' || c.split === (after ? 'holdout' : split))).map((c: any) => (after ? { ...c, tier: c.tier2, ok: c.ok2, munir: c.tier2 ? { ...(c.munir ?? {}), text: c.text2, reason: c.reason2 } : null } : c)).filter((c: any) => filter === 'all' || c.ok === false), [d, split, filter, after]);
+  const [split, setSplit] = useState<'final' | 'holdout' | 'holdout_after' | 'dev' | 'all'>('holdout'); const [filter, setFilter] = useState<'all' | 'fail'>('all'); const [open, setOpen] = useState<string | null>(null);
+  useEffect(() => { document.documentElement.lang = 'ar'; document.documentElement.dir = 'rtl'; fetch('/api/eval/results').then(r => r.ok ? r.json() : Promise.reject()).then(x => { setD(x); if (x?.final?.munir_runs > 0) setSplit('final'); }).catch(() => setErr(true)); }, []);
+  const after = split === 'holdout_after'; const fin = split === 'final';
+  const hasFinal = (d?.final?.munir_runs ?? 0) > 0;
+  // The final version and the re-run read their own stored run of the same held-out questions.
+  const rows = useMemo(() => (d?.cases ?? []).filter((c: any) => (split === 'all' || c.split === (after || fin ? 'holdout' : split)))
+    .map((c: any) => (fin ? { ...c, tier: c.tier4, ok: c.ok4, munir: c.tier4 ? { ...(c.munir ?? {}), text: c.text4, reason: c.reason4 } : null }
+      : after ? { ...c, tier: c.tier2, ok: c.ok2, munir: c.tier2 ? { ...(c.munir ?? {}), text: c.text2, reason: c.reason2 } : null } : c))
+    .filter((c: any) => filter === 'all' || c.ok === false), [d, split, filter, after, fin]);
   if (err) return <main><div className="wrap"><div className="err">تعذر تحميل النتائج.</div></div></main>;
   if (!d) return <main><div className="wrap"><div className="stage"><span className="spin" />جارٍ التحميل</div></div></main>;
   const s = d[split] ?? d.holdout;
@@ -26,10 +31,10 @@ export default function EvalPage() {
       <p className="small muted" dir="ltr" style={{ textAlign: 'right' }}>generate: {d.models.generate} · verify: {d.models.verify} · baseline: {d.models.baseline}</p>
 
       <nav className="tabs">
-        {(['holdout', 'holdout_after', 'dev', 'all'] as const).map(k => <button key={k} className="chip" aria-pressed={split === k} onClick={() => setSplit(k)}>{k === 'holdout' ? 'المحجوبة: التشغيل الأول (120)' : k === 'holdout_after' ? 'المحجوبة: بعد الإصلاح' : k === 'dev' ? 'الضبط (30)' : 'الكل (150)'}</button>)}
+        {([...(hasFinal ? (['final'] as const) : []), 'holdout', 'holdout_after', 'dev', 'all'] as const).map(k => <button key={k} className="chip" aria-pressed={split === k} onClick={() => setSplit(k)}>{k === 'final' ? 'النسخة النهائية' : k === 'holdout' ? 'المحجوبة: التشغيل الأول (120)' : k === 'holdout_after' ? 'المحجوبة: بعد الإصلاح' : k === 'dev' ? 'الضبط (30)' : 'الكل (150)'}</button>)}
       </nav>
 
-      <p className="small muted" style={{ marginBottom: 10 }}>{split === 'holdout' ? 'تشغيل واحد على الأسئلة المحجوبة والإعدادات مجمّدة، قبل أي اطلاع على نتائجها. هذا هو القياس النظيف.' : after ? 'إعادة تشغيل على الأسئلة نفسها بعد إصلاحات كشفها التشغيل الأول (إعادة المحاولة عند حد المعدل لدى المزوّد، وقاعدة أوضح للحالات الشخصية). لم تعد الأسئلة محجوبة عن الفريق، فتُقرأ هذه الأرقام مع هذا القيد.' : split === 'dev' ? 'الأسئلة التي ضُبطت عليها العتبات والتعليمات.' : 'كل الأسئلة، بالتشغيل الأول لكل منها.'}</p>
+      <p className="small muted" style={{ marginBottom: 10 }}>{fin ? 'تشغيل على النسخة النهائية بعد تحسينات بُنيت على مراجعة إخفاقات التشغيلين السابقين. الأسئلة لم تعد محجوبة عن الفريق، فهذا قياس للنسخة الحالية لا اختبار أعمى؛ التشغيل الأول يبقى القياس الأعمى الوحيد.' : split === 'holdout' ? 'تشغيل واحد على الأسئلة المحجوبة والإعدادات مجمّدة، قبل أي اطلاع على نتائجها. هذا هو القياس النظيف.' : after ? 'إعادة تشغيل على الأسئلة نفسها بعد إصلاحات كشفها التشغيل الأول (إعادة المحاولة عند حد المعدل لدى المزوّد، وقاعدة أوضح للحالات الشخصية). لم تعد الأسئلة محجوبة عن الفريق، فتُقرأ هذه الأرقام مع هذا القيد.' : split === 'dev' ? 'الأسئلة التي ضُبطت عليها العتبات والتعليمات.' : 'كل الأسئلة، بالتشغيل الأول لكل منها.'}</p>
       {none ? <div className="card center muted">لم يُشغَّل التقييم على هذه المجموعة بعد.</div> : (<>
         <div className="grid2">
           <Tile v={pct(s.behaviour_accuracy)} k="صحة التصرف" sub={`على ${s.munir_runs} سؤالاً من ${s.cases}`} />

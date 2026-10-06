@@ -31,18 +31,22 @@ function extractJson(raw: string): unknown {
 
 // Newer OpenAI families reject a custom temperature. Known ones are skipped up front; unknown ones are learned from the 400.
 const noTemp = new Set<string>();
+const noSeed = new Set<string>();   // models that reject a seed are learned from the 400, like the temperature
 const noTemperature = (m: string) => /^(o\d|gpt-5|gpt-6)/.test(m) || noTemp.has(m);
 
 async function chatOpenAI(rc: RoleConfig, msgs: ChatMsg[], json: boolean, maxTokens: number): Promise<{ text: string; in?: number; out?: number }> {
   const reasoning = /^(o\d|gpt-5|gpt-6)/.test(rc.model);
   const body: any = { model: rc.model, messages: msgs, max_completion_tokens: reasoning ? maxTokens + 3000 : maxTokens };
   if (!noTemperature(rc.model)) body.temperature = 0;
+  // Temperature 0 still leaves some run-to-run variation; a fixed seed removes most of what is left (best-effort on the provider's side).
+  if (!noSeed.has(rc.model)) body.seed = config.chatSeed;
   if (json) body.response_format = { type: 'json_object' };
   try {
     const d = await post('https://api.openai.com/v1/chat/completions', { authorization: `Bearer ${config.keys.openai}` }, body, 'openai');
     return { text: d.choices?.[0]?.message?.content ?? '', in: d.usage?.prompt_tokens, out: d.usage?.completion_tokens };
   } catch (e) {
     if (e instanceof ModelError && e.status === 400 && /temperature/i.test(e.message) && !noTemp.has(rc.model)) { noTemp.add(rc.model); return chatOpenAI(rc, msgs, json, maxTokens); }
+    if (e instanceof ModelError && e.status === 400 && /seed/i.test(e.message) && !noSeed.has(rc.model)) { noSeed.add(rc.model); return chatOpenAI(rc, msgs, json, maxTokens); }
     throw e;
   }
 }
@@ -162,23 +166,58 @@ export async function embed(texts: string[]): Promise<number[][]> {
   return (d.data as any[]).sort((a, b) => a.index - b.index).map(x => x.embedding as number[]);
 }
 
-/** Speech to text. Returns the transcript and the detected language name when available. */
-export async function transcribe(audio: Blob, filename: string): Promise<{ text: string; language?: string }> {
-  if (config.mock) return { text: 'How many rounds of tawaf are there in umrah?', language: 'english' };
+// Domain vocabulary given to the recogniser as context, so that rites and place names are heard as what they are
+// («الطائف», not «الطائر»). It biases the choice of words; it does not force a language. The screen's language only
+// decides which spelling of the vocabulary comes first.
+const STT_AR = 'أسئلة عن الحج والعمرة: الإحرام، الميقات، ذو الحليفة، الجحفة، قرن المنازل، السيل الكبير، يلملم، ذات عرق، الطائف، التنعيم، الطواف، السعي، الصفا والمروة، منى، مزدلفة، عرفة، رمي الجمرات، الهدي، الفدية، الحلق والتقصير، التحلل، طواف الإفاضة، طواف الوداع، الحجر الأسود، الركن اليماني، المحرم.';
+const STT_LATIN = "Questions about Hajj and Umrah: Ihram, Miqat, Dhul-Hulayfah, Juhfah, Qarn al-Manazil, Yalamlam, Dhat Irq, Taif, Tan'im, Tawaf, Sa'i, Safa and Marwah, Mina, Muzdalifah, Arafah, Jamarat, Hady, Fidyah, Tahallul, Tawaf al-Ifadah, Tawaf al-Wada, the Black Stone, Mahram.";
+export const sttPrompt = (lang?: string) => (!lang || lang === 'ar' ? `${STT_AR} ${STT_LATIN}` : `${STT_LATIN} ${STT_AR}`);
+
+async function sttCall(audio: Blob, filename: string, model: string, timeoutMs: number, lang?: string): Promise<{ text: string; language?: string }> {
   const fd = new FormData();
   fd.append('file', audio, filename);
-  fd.append('model', config.sttModel);
-  if (config.sttModel === 'whisper-1') fd.append('response_format', 'verbose_json');
-  const r = await fetch('https://api.openai.com/v1/audio/transcriptions', { method: 'POST', headers: { authorization: `Bearer ${config.keys.openai}` }, body: fd, signal: AbortSignal.timeout(30_000) });
+  fd.append('model', model);
+  fd.append('prompt', sttPrompt(lang));
+  // Only whisper-1 reports the detected language (verbose_json); the newer models return the text alone.
+  if (model === 'whisper-1') fd.append('response_format', 'verbose_json');
+  const r = await fetch('https://api.openai.com/v1/audio/transcriptions', { method: 'POST', headers: { authorization: `Bearer ${config.keys.openai}` }, body: fd, signal: AbortSignal.timeout(timeoutMs) });
   const text = await r.text();
   if (!r.ok) throw new ModelError('openai', r.status, `stt ${r.status}: ${text.slice(0, 300)}`);
   const d = JSON.parse(text);
   return { text: d.text ?? '', language: d.language };
 }
 
-/** Text to speech. Returns MP3 bytes. */
+/**
+ * Speech to text. Returns the transcript and the detected language name when available.
+ * A final transcript uses the accurate model, an interim caption (`partial`) the small fast one; if either fails,
+ * whisper-1 answers instead. The language is never forced: pilgrims speak many languages at the same device.
+ */
+export async function transcribe(audio: Blob, filename: string, opts: { partial?: boolean; lang?: string } = {}): Promise<{ text: string; language?: string }> {
+  if (config.mock) return { text: 'How many rounds of tawaf are there in umrah?', language: 'english' };
+  const timeoutMs = opts.partial ? 12_000 : 30_000; const t0 = Date.now();
+  const model = opts.partial ? config.sttPartialModel : config.sttModel;
+  try { return await sttCall(audio, filename, model, timeoutMs, opts.lang); }
+  catch (e) {
+    const left = timeoutMs - (Date.now() - t0);
+    if (model === 'whisper-1' || left < 2_000) throw e;
+    return sttCall(audio, filename, 'whisper-1', left, opts.lang);
+  }
+}
+
+/** A short silent WAV (16-bit mono PCM), so the player can be exercised without a speech provider. */
+export function silentWav(seconds = 1.5, rate = 8000): ArrayBuffer {
+  const n = Math.round(seconds * rate); const buf = new ArrayBuffer(44 + n * 2); const v = new DataView(buf);
+  const str = (o: number, s: string) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  str(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); str(8, 'WAVE'); str(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); str(36, 'data'); v.setUint32(40, n * 2, true);
+  return buf;
+}
+/** The media type of what `speak` returns. */
+export const speechType = () => (config.mock ? 'audio/wav' : 'audio/mpeg');
+
+/** Text to speech. Returns MP3 bytes (a short silent WAV in mock mode). */
 export async function speak(text: string, lang: string): Promise<ArrayBuffer> {
-  if (config.mock) return new ArrayBuffer(0);
+  if (config.mock) return silentWav();
   const body: any = { model: config.ttsModel, voice: config.ttsVoice, input: text.slice(0, 3500), response_format: 'mp3' };
   if (config.ttsModel.startsWith('gpt-4o')) body.instructions = `Speak clearly and calmly in ${lang}. Pronounce Islamic terms carefully.`;
   const r = await fetch('https://api.openai.com/v1/audio/speech', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${config.keys.openai}` }, body: JSON.stringify(body), signal: AbortSignal.timeout(40_000) });

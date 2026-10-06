@@ -10,6 +10,7 @@ export interface Understanding {
   nusuk: 'hajj' | 'umrah' | 'both' | 'none'; stage: string; injection_suspected: boolean;
   utterance?: 'question' | 'greeting' | 'not_question' | 'unclear';   // what kind of utterance this is
   heard_fix?: string | null;                                          // the corrected question when a word was misheard or mistyped
+  term_query?: string | null;                                         // the sharia term whose meaning or translation is all that is asked
 }
 
 export interface SourceRef { n: number; chunk_id: string; title: string; author: string | null; page: number | null; path: string | null; excerpt: string; url: string | null }

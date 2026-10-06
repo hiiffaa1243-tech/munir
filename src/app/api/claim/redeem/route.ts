@@ -1,12 +1,12 @@
 import { z } from 'zod';
 import { bad, clientIp, json, rateLimit } from '@/lib/http';
-import { hashKey, normalizeCode, readClaimToken, validKey } from '@/lib/notebook/tokens';
+import { hashKey, normalizeCode, readClaimToken, scopeInteraction, validKey } from '@/lib/notebook/tokens';
 import { sb } from '@/lib/db';
 
 export const runtime = 'nodejs';
 const Body = z.object({ token: z.string().max(400).optional(), code: z.string().max(16).optional(), notebook_key: z.string(), lang: z.string().max(5).optional() });
 
-/** Phone redeems a claim. Creates the notebook on first use, otherwise merges the kiosk session into it. */
+/** Phone redeems a claim. Creates the notebook on first use, then attaches the ONE answer the claim covers. */
 export async function POST(req: Request) {
   const ip = clientIp(req);
   let b: z.infer<typeof Body>;
@@ -31,6 +31,11 @@ export async function POST(req: Request) {
     claim = row;
   } else return bad('token or code required');
 
+  // A claim covers one answer. Older claims covered a whole kiosk session, which could expose another
+  // visitor's questions: they are refused, unused.
+  const interactionId = scopeInteraction(claim!.session_id);
+  if (!interactionId) return bad('expired or invalid', 410);
+
   const key_hash = hashKey(b.notebook_key);
   let { data: nb } = await db.from('notebooks').select('id').eq('key_hash', key_hash).maybeSingle();
   if (!nb) {
@@ -41,7 +46,7 @@ export async function POST(req: Request) {
   const notebookId = (nb as any).id as string;
   const upd = await db.from('claims').update({ used: true }).eq('nonce', claim!.nonce).eq('used', false).select('nonce');
   if (upd.error || !(upd.data as any[])?.length) return bad('already used', 410);
-  await db.from('interactions').update({ notebook_id: notebookId }).eq('session_id', claim!.session_id).is('notebook_id', null);
-  await db.from('tickets').update({ notebook_id: notebookId }).eq('session_id', claim!.session_id).is('notebook_id', null);
+  await db.from('interactions').update({ notebook_id: notebookId }).eq('id', interactionId).is('notebook_id', null);
+  await db.from('tickets').update({ notebook_id: notebookId }).eq('interaction_id', interactionId).is('notebook_id', null);
   return json({ ok: true });
 }

@@ -14,6 +14,8 @@ const Body = z.object({
   session_id: z.string().max(80).optional(),
   kiosk: z.string().max(40).optional(),
   clarified: z.boolean().optional(),
+  voice: z.boolean().optional(),       // the text came from speech recognition
+  confirmed: z.boolean().optional(),   // the asker confirmed this wording after a "did you mean" (or declined the suggestion)
 });
 
 /** Streams newline-delimited JSON: {"stage": "..."} progress lines, then {"result": Answer}. */
@@ -35,11 +37,12 @@ export async function POST(req: Request) {
       // If the visitor walks away mid-answer the stream closes; the pipeline must still finish so the question is recorded and a referral still opens its ticket.
       const send = (o: unknown) => { try { ctrl.enqueue(enc.encode(JSON.stringify(o) + '\n')); } catch { /* client gone */ } };
       try {
-        const result = await ask({ text: body.text, langHint: body.lang, sessionId: body.session_id, kiosk: body.kiosk, clarified: body.clarified, notebookId }, stage => send({ stage }));
+        const result = await ask({ text: body.text, langHint: body.lang, sessionId: body.session_id, kiosk: body.kiosk, clarified: body.clarified, voice: body.voice, confirmed: body.confirmed, notebookId }, stage => send({ stage }));
         // Internal diagnostics stay on the server.
         // Only the facts a visitor may see travel to the browser: which model checked the answer and how long it took.
         const f = result.flags as Record<string, any>;
         const flags = { verify: f.verify ? { checked: f.verify.checked, model: f.verify.model, independent: f.verify.independent } : undefined, refer_reason: f.refer_reason };
+        // `suggest` (tier 'confirm') and `explained` (tier 'verified') are fields of the answer itself and travel with it.
         send({ result: { ...result, flags, timings: { total: result.timings.total } } });
       } catch (e) {
         console.error('ask failed', e);

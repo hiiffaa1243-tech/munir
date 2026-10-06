@@ -9,7 +9,7 @@ import type { Case } from '@/lib/eval/metrics';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
-const Body = z.object({ case_id: z.string(), run: z.number().int().min(1).max(3), baseline: z.boolean().default(false) });
+const Body = z.object({ case_id: z.string(), run: z.number().int().min(1).max(5), baseline: z.boolean().default(false) });
 
 const JUDGE_X = JUDGE.replace('Return JSON: {', 'Also set "abstained": true if the answer declines to rule or only refers the asker to a scholar without giving a ruling.\nReturn JSON: {"abstained": boolean, ');
 
@@ -31,7 +31,7 @@ export async function POST(req: Request) {
   if (!c) return bad('unknown case', 404);
   const db = sb();
   try {
-    const a = await ask({ text: c.question, sessionId: `eval-${c.id}-${b.run}`, isEval: true, kiosk: 'eval' });
+    const a = await ask({ text: c.question, sessionId: `eval-${c.id}-${b.run}`, isEval: true, confirmed: true, kiosk: 'eval' });
     // Reference passages for the judges: what retrieval found for this question.
     let passages: string[] = [];
     if (a.interaction_id) {
@@ -40,7 +40,7 @@ export async function POST(req: Request) {
       if (ids.length) { const { data: ch } = await db.from('chunks').select('id,text').in('id', ids); passages = ((ch ?? []) as any[]).map(x => x.text); }
     }
     const text = [a.summary, ...a.claims.map(x => x.text), ...a.cases.map(x => `${x.condition}: ${x.ruling}`), a.action].filter(Boolean).join('\n');
-    const mj = a.tier === 'grounded' && b.run <= 2 ? await judge(c.question, text, passages).catch(() => null) : null;
+    const mj = a.tier === 'grounded' && (b.run <= 2 || b.run === 4) ? await judge(c.question, text, passages).catch(() => null) : null;
     const payload = { summary: a.summary, text, tier: a.tier, sources: a.sources.length, approx_translation: a.approx_translation, flags: a.flags, timings: a.timings, lang: a.lang, verified: a.verified ?? null, clarify: a.clarify, judge: mj };
     await db.from('eval_results').upsert({ case_id: c.id, run: b.run, system: 'munir', tier: a.tier, payload }, { onConflict: 'case_id,run,system' });
     let base: any = null;
