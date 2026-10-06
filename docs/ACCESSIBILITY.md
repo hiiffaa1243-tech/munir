@@ -102,3 +102,14 @@ MUNIR_MOCK=1 npx next build && MUNIR_MOCK=1 npx next start -p 3141
 mkdir /tmp/axe && cd /tmp/axe && npm init -y && npm i axe-core
 python3 scripts/a11y-audit.py http://localhost:3141 /tmp/axe/node_modules/axe-core/axe.min.js out.json
 ```
+
+## Final re-audit of the shipped build
+
+The two violations that remained after the first round of fixes were both `scrollable-region-focusable` on `/eval` at phone width. The results tables on `/eval` are now focusable regions with an accessible name. The same script was then run again against the final build (all 40 screens):
+
+| | Before | After first fixes | Final build |
+|---|---|---|---|
+| Screens with a violation | 10 of 40 | 2 of 40 | 0 of 40 |
+| Failing elements | 42 | 2 | 0 |
+
+The limits stated above still apply: this is an automated audit, and no test with blind or low-vision pilgrims has been run yet.

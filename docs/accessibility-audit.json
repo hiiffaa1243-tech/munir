@@ -536,5 +536,12 @@
    "why": "file owned by another work package during this pass; fix is tabIndex=0 + role=region + aria-label on the wrapper, already applied to the same pattern on /insights"
   }
  ],
- "limits": "Automated checks detect only part of accessibility problems. No test with blind or low-vision pilgrims and no manual screen-reader pass (VoiceOver, TalkBack, NVDA) has been run yet."
+ "limits": "Automated checks detect only part of accessibility problems. No test with blind or low-vision pilgrims and no manual screen-reader pass (VoiceOver, TalkBack, NVDA) has been run yet.",
+ "final_build": {
+  "screens_audited": 40,
+  "screens_with_violations": 0,
+  "violations_total": 0,
+  "nodes_total": 0,
+  "note": "re-run of scripts/a11y-audit.py after the /eval tables were made focusable regions"
+ }
 }
