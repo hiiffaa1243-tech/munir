@@ -179,6 +179,12 @@ export async function ask(input: AskInput, onStage: StageCb = () => {}): Promise
     return [v[0], u.q_ar.trim() ? v[1] : null, issue ? v[2] : null, third ? (v[3] ?? null) : null] as const;
   });
 
+  // The library is searched while the memory of published answers is being checked: the two do not depend on each
+  // other, and a question that is not in the memory then has its passages ready.
+  let searching: Promise<Retrieved> | null = null;
+  const firstSearch = (): Promise<Retrieved> => (searching ??= retrieve(u.q_en, qEmb, qArEmb, { text: issue, emb: issueEmb }, { origEmb }));
+  firstSearch().catch(() => { /* reported where it is awaited */ });
+
   /**
    * The grounded path: retrieval → constrained generation → citation checks in code → independent verification →
    * constrained translation. With `explain` (the text of a published answer already on screen) the composer adds
@@ -189,7 +195,7 @@ export async function ask(input: AskInput, onStage: StageCb = () => {}): Promise
     const fail = (reason: string, chunkIds: string[] = [], clarify?: string): Composed => ({ ok: false, reason, chunkIds, clarify, flags: fl });
     const late = () => Date.now() > cutoff;
     const tm = (name: string) => (explain ? `explain_${name}` : name);
-    const search = (topK?: number) => retrieve(u.q_en, qEmb, qArEmb, { text: issue, emb: issueEmb }, { origEmb, topK });
+    const search = (topK?: number) => (topK ? retrieve(u.q_en, qEmb, qArEmb, { text: issue, emb: issueEmb }, { origEmb, topK }) : firstSearch());
 
     // Gate 3: answerability. No generation without enough context.
     stage('retrieve');
