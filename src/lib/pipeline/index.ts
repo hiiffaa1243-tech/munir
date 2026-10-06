@@ -12,6 +12,8 @@ const DEADLINE_MS = 50_000; // the platform limit is 60 s
 const WIDEN_SIM_MIN = 0.45;       // the composer abstained although retrieval was confident: worth one look at a wider context
 const WIDEN_BEFORE_MS = 18_000;   // ...but only while there is time left for it
 const WIDE_TOP_K = 14;
+const EXPLAIN_SHORT_CHARS = 260;   // a published answer shorter than this is a bare ruling
+const EXPLAIN_SIM_BELOW = 0.8;      // below this the new question is not just a rewording of the stored one
 const EXPLAIN_BEFORE_MS = 25_000; // no stage of an explanation starts after this much of the request has passed
 const EXPLAIN_HARD_MS = 38_000;   // and the published answer is never held back longer than this
 const clip = (s: string, n: number) => (s.length > n ? s.slice(0, n).replace(/\s+\S*$/, '') + '…' : s);
@@ -226,6 +228,9 @@ export async function ask(input: AskInput, onStage: StageCb = () => {}): Promise
     fl.verify = { checked: verdicts.length, failed: failedAll.length, dropped, dropped_statements: nRulings - kept, kept_statements: kept, model: vr.model, independent: !vr.fallback && !vr.model.startsWith(config.roles.gen.provider + '/') };
     if (failedAll.length) fl.verify_failures = failedAll.map(f => ({ statement: clip(items[f.id]?.statement ?? '', 160), verdict: f.verdict, reason: f.reason }));
     if (!kept) return fail('verification_failed', chunkIds);
+    // When rulings were removed, what is left must still answer the question. The one-line summary is the direct
+    // answer: if it did not pass either, the surviving statements are side remarks and the question is referred.
+    if (!explain && kept < nRulings && sIdx >= 0 && !passed.has(sIdx)) return fail('verification_failed', chunkIds);
 
     // Assemble in the asker's language. Sources are numbered over the statements that are shown, so the numbers
     // beside a statement always match the list below it.
@@ -277,7 +282,10 @@ export async function ask(input: AskInput, onStage: StageCb = () => {}): Promise
       // The published text is right but leaves the asker short: a generated, labelled explanation from the sources
       // is added under it, if and only if it passes every gate in time. A failed explanation costs nothing:
       // the published answer is shown exactly as it would have been.
-      if (hit.needs_explanation && Date.now() - t0 < EXPLAIN_BEFORE_MS) {
+      // An explanation is prepared when the checker asks for one, when the stored question is not a near-identical
+      // wording of the new one, or when the published text is a bare ruling of a line or two.
+      const thin = (va.answer_en ?? '').length < EXPLAIN_SHORT_CHARS || (va.similarity ?? 1) < EXPLAIN_SIM_BELOW;
+      if ((hit.needs_explanation || thin) && Date.now() - t0 < EXPLAIN_BEFORE_MS) {
         let x: Composed | null = null; let timer: ReturnType<typeof setTimeout> | undefined;
         try {
           x = await Promise.race([

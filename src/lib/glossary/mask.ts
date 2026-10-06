@@ -174,6 +174,8 @@ export function textLang(text: string, fallback = 'en'): string {
 
 /** Write the honorific ligatures ﷺ and ﷻ out in the reader's language, without doubling brackets the text already has. */
 export function honorifics(text: string, lang: string): string {
+  // A translator sometimes drops the ligature and leaves its brackets behind: "النبي () يدعو".
+  if (text) text = text.replace(/\s*[(（]\s*[)）]/g, '');
   if (!text || !/[ﷺﷻ]/.test(text)) return text;
   const put = (s: string, ch: string, form: string | undefined) => {
     if (!s.includes(ch)) return s;

@@ -64,16 +64,19 @@ describe('terminology questions', () => {
   });
 });
 
+// Long enough not to count as a bare one-line ruling (those always get an explanation).
+const PUBLISHED = 'A man in ihram may cover his face. ' + 'This is the position of the Shafi\'i and Hanbali schools and of a group of the early scholars, and it was chosen by Ibn Hazm and by Ibn Uthaymin, because nothing authentic forbids a man in ihram from covering his face, unlike his head. '.repeat(2).trim();
+
 describe('published answers', () => {
   it('explains a thin published answer, and refers a personal case with the general ruling', async () => {
-    await db.from('verified_answers').insert({ code: 'PC-1', q_canon: 'Covering the face in ihram', answer: 'يجوز للمحرم أن يغطي وجهه ﷺ', answer_lang: 'ar', answer_en: 'A man in ihram may cover his face.', translations: {}, source_title: 'Fatawa', source_locator: null, source_quote: 'q', author_name: 'Committee' });
+    await db.from('verified_answers').insert({ code: 'PC-1', q_canon: 'Covering the face in ihram', answer: 'يجوز للمحرم أن يغطي وجهه ﷺ', answer_lang: 'ar', answer_en: PUBLISHED, translations: {}, source_title: 'Fatawa', source_locator: null, source_quote: 'q', author_name: 'Committee' });
     const plain = await ask({ text: 'May a man in ihram cover his face?' });
     expect(plain.tier).toBe('verified'); expect(plain.explained).toBeUndefined(); expect(plain.claims).toHaveLength(0);
     const x = await ask({ text: 'May I wear a face mask in ihram?' });
-    expect(x.tier).toBe('verified'); expect(x.explained).toBe(true); expect(x.summary).toBe('A man in ihram may cover his face.');
+    expect(x.tier).toBe('verified'); expect(x.explained).toBe(true); expect(x.summary).toBe(PUBLISHED);
     expect(x.claims.length).toBeGreaterThan(0); expect(x.sources.length).toBeGreaterThan(0);
     const p = await ask({ text: 'I covered my face in ihram, is my umrah valid?', sessionId: 'kiosk-session-2' });
-    expect(p.tier).toBe('referred'); expect(p.flags.refer_reason).toBe('personal_case'); expect(p.summary).toBe('A man in ihram may cover his face.');
+    expect(p.tier).toBe('referred'); expect(p.flags.refer_reason).toBe('personal_case'); expect(p.summary).toBe(PUBLISHED);
     expect(p.verified?.code).toBe('PC-1'); expect(p.ticket?.id).toBeTruthy();
   });
 });
