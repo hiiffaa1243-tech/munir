@@ -1,13 +1,13 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
-import { FAQ, UI, t, uiLang, type UiLang } from '@/lib/i18n';
+import { FAQ, UI, UI_LANGS, t, uiLang, type UiLang } from '@/lib/i18n';
 import AnswerCard from '@/components/AnswerCard';
 import AskBox from '@/components/AskBox';
 import { useAsker } from '@/components/useAsker';
 import { applyDocLang, randomId, saveLang, savedLang } from '@/components/client';
 
-const LANGS = Object.keys(UI) as UiLang[];
+const LANGS = UI_LANGS;
 const IDLE_MS = 60_000;
 
 interface Claim { url: string; code: string; short_url: string; qr: string }

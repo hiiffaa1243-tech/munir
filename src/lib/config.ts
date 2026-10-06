@@ -49,12 +49,12 @@ export const config = {
   limits: { maxQuestionChars: 500, maxAudioBytes: 2_500_000, askPerMinute: 20 },
 };
 
-export const SUPPORTED_LANGS = ['ar', 'en', 'ur', 'id', 'fr'] as const;
+export const SUPPORTED_LANGS = ['ar', 'en', 'ur', 'id', 'fr', 'hi', 'zh'] as const;
 export type Lang = (typeof SUPPORTED_LANGS)[number];
 export const BETA_LANGS = ['tr', 'bn'] as const;
 export const isLang = (x: string): x is Lang => (SUPPORTED_LANGS as readonly string[]).includes(x);
 export const LANG_NAMES: Record<string, string> = {
-  ar: 'Arabic', en: 'English', ur: 'Urdu', id: 'Indonesian', fr: 'French', tr: 'Turkish', bn: 'Bengali',
+  ar: 'Arabic', en: 'English', ur: 'Urdu', id: 'Indonesian', fr: 'French', hi: 'Hindi (Devanagari script)', zh: 'Simplified Chinese', tr: 'Turkish', bn: 'Bengali',
 };
 export const RTL_LANGS = new Set(['ar', 'ur']);
 

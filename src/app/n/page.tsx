@@ -1,7 +1,7 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Answer } from '@/lib/pipeline/types';
-import { UI, t, uiLang, type UiLang } from '@/lib/i18n';
+import { UI, UI_LANGS, t, uiLang, type UiLang } from '@/lib/i18n';
 import AnswerCard from '@/components/AnswerCard';
 import AskBox from '@/components/AskBox';
 import { useAsker } from '@/components/useAsker';
@@ -13,7 +13,7 @@ interface Item {
   resolution: { text: string; author: string; source_title: string; source_locator: string | null; source_quote: string; resolved_at: string } | null;
 }
 const CACHE = 'munir_nb_items';
-const LANGS = Object.keys(UI) as UiLang[];
+const LANGS = UI_LANGS;
 
 /** The pilgrim's notebook: no account, no name. Saved answers stay readable without a connection. */
 export default function Notebook() {

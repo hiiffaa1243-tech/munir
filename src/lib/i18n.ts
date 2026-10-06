@@ -1,8 +1,12 @@
-// Interface strings for the five launch languages (plus two beta languages that fall back to English UI).
-export type UiLang = 'ar' | 'en' | 'ur' | 'id' | 'fr';
+// Interface strings. The five launch languages live here; Hindi and Chinese in i18n.extra.ts; the voice-first strings in i18n.voice.ts.
+import { EXTRA, EXTRA_FAQ } from './i18n.extra';
+import { VOICE } from './i18n.voice';
+
+export type UiLang = 'ar' | 'en' | 'ur' | 'id' | 'fr' | 'hi' | 'zh';
+type BaseLang = 'ar' | 'en' | 'ur' | 'id' | 'fr';
 type Dict = Record<string, string>;
 
-export const UI: Record<UiLang, Dict> = {
+const BASE: Record<BaseLang, Dict> = {
   ar: {
     langName: 'العربية', title: 'منير', tagline: 'اسأل عن نسكك بلغتك', sub: 'إجابة من مصادر معتمدة، مع ذكر المصدر',
     placeholder: 'اكتب سؤالك عن الحج أو العمرة', ask: 'اسأل', speak: 'تحدث', listening: 'أستمع إليك... اضغط للإنهاء', faq: 'أسئلة شائعة',
@@ -110,13 +114,24 @@ export const UI: Record<UiLang, Dict> = {
   },
 };
 
-export const uiLang = (l: string | undefined | null): UiLang => (l && l in UI ? (l as UiLang) : 'en');
+// Every interface language: the five launch languages, then Hindi and Chinese (added with their own reference books),
+// each merged with the strings of the voice-first service point.
+const merge = (...ds: (Dict | undefined)[]): Dict => Object.assign({}, ...ds.filter(Boolean));
+export const UI: Record<UiLang, Dict> = {
+  ar: merge(BASE.ar, VOICE.ar), en: merge(BASE.en, VOICE.en), ur: merge(BASE.ur, VOICE.ur), id: merge(BASE.id, VOICE.id), fr: merge(BASE.fr, VOICE.fr),
+  hi: merge(EXTRA.hi, VOICE.hi), zh: merge(EXTRA.zh, VOICE.zh),
+};
+/** Languages offered in the language switcher: only those whose interface strings are present. */
+export const UI_LANGS = (Object.keys(UI) as UiLang[]).filter(l => !!UI[l].langName);
+
+export const uiLang = (l: string | undefined | null): UiLang => (l && l in UI && UI[l as UiLang].langName ? (l as UiLang) : 'en');
 export const t = (l: string | undefined | null, k: string): string => UI[uiLang(l)][k] ?? UI.en[k] ?? k;
 
-export const FAQ: Record<UiLang, string[]> = {
+const BASE_FAQ: Record<BaseLang, string[]> = {
   ar: ['ما هي محظورات الإحرام؟', 'تعطرت بعد الإحرام، ماذا عليّ؟', 'شككت في عدد أشواط الطواف', 'هل يلزم طواف الوداع بعد العمرة؟'],
   en: ['What are the prohibitions of ihram?', 'I used perfume after entering ihram. What should I do?', 'I lost count of my tawaf rounds', 'Is a farewell tawaf required after Umrah?'],
   ur: ['احرام کی ممنوعات کیا ہیں؟', 'میں نے احرام کے بعد خوشبو لگا لی، اب کیا کروں؟', 'طواف کے چکروں کی گنتی میں شک ہو گیا', 'کیا عمرے کے بعد طوافِ وداع ضروری ہے؟'],
   id: ['Apa saja larangan ihram?', 'Saya memakai parfum setelah ihram, apa yang harus saya lakukan?', 'Saya ragu jumlah putaran tawaf', 'Apakah tawaf wada wajib setelah umrah?'],
   fr: ["Quels sont les interdits de l'ihram ?", "J'ai mis du parfum après l'ihram. Que dois-je faire ?", "J'ai un doute sur le nombre de tours du tawaf", "Le tawaf d'adieu est-il requis après la Omra ?"],
 };
+export const FAQ: Record<UiLang, string[]> = { ...BASE_FAQ, hi: EXTRA_FAQ.hi ?? BASE_FAQ.en, zh: EXTRA_FAQ.zh ?? BASE_FAQ.en };

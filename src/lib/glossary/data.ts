@@ -11,6 +11,7 @@ export interface Term {
   en: string;                 // canonical English form
   variants: string[];         // spellings found in English sources (regex fragments, case-insensitive)
   ar: string; ur: string; id: string; fr: string;
+  hi?: string; zh?: string;   // Hindi and Chinese renderings, taken from the approved books in those languages
   tr?: string; bn?: string;   // beta languages
   gloss?: Partial<Record<'en' | 'ar' | 'ur' | 'id' | 'fr', string>>; // short explanation on first mention
   forbid?: Partial<Record<'en' | 'ur' | 'id' | 'fr', string[]>>;     // renderings that must never appear
