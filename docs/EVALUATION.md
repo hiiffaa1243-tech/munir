@@ -92,7 +92,7 @@ After run 2 the failures were read one by one and the system was changed in gene
 | Answers with a checkable source | 100% | 100% | 100% | 1.7% |
 | Glossary integrity | 94.8% | 95.4% | 97.4% | not applicable |
 | Latency, median / 90th percentile | 4.7 s / 10.8 s | 6.0 s / 16.8 s | 14.4 s / 23.9 s | not measured |
-| Stability on a repeat run | not measured | 80.8% | see the live `/eval` page (run 5) | not measured |
+| Stability on a repeat run | not measured | 80.8% | 85.0% | not measured |
 
 | Category | n | Run 1 | Run 2 | Run 4 |
 |---|---|---|---|---|
@@ -107,6 +107,8 @@ After run 2 the failures were read one by one and the system was changed in gene
 By question language (run 4): English 96%, Arabic 95%, Indonesian 92%, Urdu 91%, French 89%.
 
 **How run 4 was made.** The 120 questions were run three at a time while the new source books were being embedded. Sixteen questions ended in a provider failure (the composing model could not be reached or returned an unreadable reply under the rate limit); at that time such a failure was recorded under the same label as a citation failure. The code was changed to record provider failures separately and to retry once after a pause, and those sixteen questions were run again, two at a time; fourteen of them were then answered. No other question was re-run. The figures above include those re-runs.
+
+**Stability.** Run 5 repeated the final version on the same 120 questions: the behaviour was the same on 85.0% of them (80.8% for the previous version). Twenty-five of its questions failed to reach the server when the machine driving the run lost its connection and were run again afterwards. These runs bypass the consistency memory that serves visitors: in the service itself an answer that passed every gate is stored and given again when the same question comes back (same wording, or the same normalised question in the same language), so a visitor who repeats a question that was answered gets the same answer. A question that was referred is always tried afresh.
 
 **What got worse, and why.** The unsupported-claim rate rose from about 1% to 4.5%: the final version answers 95 of the 120 questions instead of referring a third of them, and keeps the supported statements of a draft when another statement of the same draft fails. Median latency rose from 6 s to 14 s: more questions go through generation and verification, published answers may get an explanation, more passages are read, and the verifier's provider was slow under parallel load during the run (its calls now time out after 12 s and move to the next model). Both are the price of fewer referrals and are reported as measured.
 
