@@ -62,6 +62,19 @@ function tokens(text: string): { w: string; s: number; e: number }[] {
  * characters, not the model's retyping of them. The quote is located in the passage by its longest run of
  * matching words and the passage's slice is returned. Null when no slice of the passage carries it.
  */
+/** The sentence of the passage that shares most of the quotation's words (at least 60% of them), in the passage's own wording. */
+function nearestSentence(quote: string, passage: string): string | null {
+  const norm = (t: string) => new Set(t.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f\u064B-\u065F\u0670\u0640]/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim().split(' ').filter(w => w.length > 1));
+  const q = norm(quote); if (q.size < 4) return null;
+  let best: string | null = null; let top = 0;
+  for (const raw of passage.split(/(?<=[.!?؟。؛])\s+|\n+/)) {
+    const sent = raw.trim(); if (sent.length < 25 || sent.length > 600) continue;
+    const w = norm(sent); let hit = 0; for (const x of q) if (w.has(x)) hit++;
+    const score = hit / q.size; if (score > top) { top = score; best = sent; }
+  }
+  return top >= 0.6 ? best : null;
+}
+
 function locate(quote: string, passage: string): string | null {
   const q = quote.trim(); if (!q) return null;
   if (passage.includes(q)) return q;
@@ -142,8 +155,13 @@ export async function POST(req: Request) {
     const seen = new Set<string>(); let unmatched = 0;
     const evidence: { n: number; kind: string; quote: string; note_ar: string; title: string; author: string | null; page: number | null; url: string | null; chunk_id: string }[] = [];
     for (const e of out.evidence.slice(0, 8)) {
-      const c = byId.get(e.chunk_id);
-      const exact = c && quoteCoverage(e.quote, c.text) >= QUOTE_MIN ? locate(e.quote, c.text) : null;
+      // The model may cite the wrong passage for a quotation it copied correctly: every retrieved passage is tried,
+      // the cited one first. Failing that, the sentence of the cited passage that shares most of the quotation's
+      // words is taken in the passage's own wording. What is shown is always the source's text, never the model's.
+      let c = byId.get(e.chunk_id);
+      let exact = c && quoteCoverage(e.quote, c.text) >= QUOTE_MIN ? locate(e.quote, c.text) : null;
+      if (!exact) for (const k of chunks) { if (quoteCoverage(e.quote, k.text) >= QUOTE_MIN) { const x = locate(e.quote, k.text); if (x) { c = k; exact = x; break; } } }
+      if (!exact && c) exact = nearestSentence(e.quote, c.text);
       if (!c || !exact) { unmatched++; continue; }
       const key = `${c.id}|${exact}`; if (seen.has(key)) continue; seen.add(key);
       const s = srcs[c.source_id];
@@ -154,11 +172,19 @@ export async function POST(req: Request) {
       });
     }
 
+    // No quotation stood: the specialist still sees the passages closest to the question, in their own words.
+    const matched = evidence.length;
+    if (!matched) for (const c of chunks.slice(0, 3)) {
+      const s = srcs[c.source_id]; const web = !!s?.url && s.url.includes('{page}');
+      const cut = c.text.length > 420 ? c.text.slice(0, 420).replace(/[^.!?؟。؛\n]*$/, '').trim() || c.text.slice(0, 420) : c.text;
+      evidence.push({ n: evidence.length + 1, kind: 'text', quote: cut, note_ar: 'مقطع قريب من السؤال في المصادر، لم يُبنَ عليه جواب', title: s?.title ?? c.source_id, author: s?.author ?? null, page: web ? null : c.page, url: web ? s!.url!.replace('{page}', String(c.page ?? '')) : (s?.url ?? null), chunk_id: c.id });
+    }
+
     // 6. a draft is shown only when it has a ruling and at least one quotation that stood
     const gaps = out.gaps_ar.map(g => g.trim()).filter(Boolean).slice(0, 8);
     let draft: { ruling_ar: string; cases_ar: { condition: string; ruling: string }[]; spoken_ar: string; disagreement: boolean } | null = null;
     if (!out.ruling_ar) gaps.unshift('المصادر المعتمدة لا تحسم هذا السؤال بنص صريح، فلم تُقترح مسودة جواب.');
-    else if (!evidence.length) gaps.unshift('لم يطابق أي اقتباس نصَّ مصدره، فحُجبت المسودة احتياطاً.');
+    else if (!matched) gaps.unshift('لم يطابق أي اقتباس نصَّ مصدره، فحُجبت المسودة احتياطاً. المقاطع المعروضة هي الأقرب إلى السؤال في المصادر.');
     else draft = { ruling_ar: out.ruling_ar, cases_ar: out.cases_ar.filter(c => c.condition && c.ruling).slice(0, 8), spoken_ar: out.spoken_ar, disagreement: out.disagreement };
 
     // 7. trail
