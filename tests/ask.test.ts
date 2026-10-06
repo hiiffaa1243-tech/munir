@@ -101,3 +101,15 @@ describe('speech stand-ins', () => {
     expect(b.length).toBe(44 + 1.5 * 8000 * 2); expect(models.speechType()).toBe('audio/wav');
   });
 });
+
+describe('consistency memory', () => {
+  it('gives the same answer again when the same question comes back, and never recalls for an evaluation run', async () => {
+    const first = await ask({ text: 'How many rounds are there in tawaf for umrah?', sessionId: 'kiosk-session-9' });
+    expect(['grounded', 'verified']).toContain(first.tier); expect(first.flags.recalled).toBeUndefined();
+    const again = await ask({ text: 'how many rounds are there in tawaf for umrah', sessionId: 'kiosk-session-10' });
+    expect(again.tier).toBe(first.tier); expect(again.flags.recalled).toBe(first.interaction_id); expect(again.summary).toBe(first.summary);
+    expect(again.interaction_id).toBeTruthy(); expect(again.interaction_id).not.toBe(first.interaction_id);
+    const evalRun = await ask({ text: 'How many rounds are there in tawaf for umrah?', isEval: true });
+    expect(evalRun.flags.recalled).toBeUndefined();
+  });
+});

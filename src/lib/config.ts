@@ -31,7 +31,8 @@ export const config = {
   sttPartialModel: env('STT_PARTIAL_MODEL', 'gpt-4o-mini-transcribe'), // interim captions while the person is still speaking
   chatSeed: num('CHAT_SEED', 7),                               // fixed sampling seed where the provider supports one (best-effort repeatability)
   ttsModel: env('TTS_MODEL', 'gpt-4o-mini-tts'),
-  ttsVoice: env('TTS_VOICE', 'alloy'),
+  ttsVoice: env('TTS_VOICE', 'onyx'),
+  ttsVoiceAr: env('TTS_VOICE_AR', 'onyx'),   // the voice that reads Arabic (a deep, calm male voice)
   keys: {
     openai: env('OPENAI_API_KEY'),
     google: env('GOOGLE_API_KEY'),

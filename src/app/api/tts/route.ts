@@ -14,7 +14,7 @@ export async function POST(req: Request) {
   let b: z.infer<typeof Body>;
   try { b = Body.parse(await req.json()); } catch { return bad('invalid request'); }
   try {
-    const audio = await speak(b.text, LANG_NAMES[b.lang] ?? 'English');
+    const audio = await speak(b.text, LANG_NAMES[b.lang] ?? 'English', b.lang);
     return new Response(audio, { headers: { 'content-type': speechType(), 'cache-control': 'private, max-age=3600' } });
   } catch (e) { console.error('tts failed', e); return bad('speech failed', 502); }
 }

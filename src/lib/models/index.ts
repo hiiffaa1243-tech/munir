@@ -220,11 +220,20 @@ export function silentWav(seconds = 1.5, rate = 8000): ArrayBuffer {
 /** The media type of what `speak` returns. */
 export const speechType = () => (config.mock ? 'audio/wav' : 'audio/mpeg');
 
-/** Text to speech. Returns MP3 bytes (a short silent WAV in mock mode). */
-export async function speak(text: string, lang: string): Promise<ArrayBuffer> {
+// How the answer is read aloud. Arabic is read as a Saudi scholar would read it to a pilgrim: this is a manner of
+// delivery (accent, pace, register), not an imitation of any particular person.
+const VOICE_AR = `Voice: a mature Saudi religious scholar giving guidance to pilgrims. Calm, dignified, warm, unhurried.
+Accent: Saudi Arabian pronunciation of formal Arabic, as heard in lessons at the Two Holy Mosques: clear articulation of every letter (ق ج ث ذ ظ ض pronounced fully), no Egyptian, Levantine or Maghrebi colouring.
+Delivery: measured pace with a short pause after each ruling; reverent when Allah or the Prophet is mentioned; reassuring, never theatrical.
+Read the text exactly as written: do not add, drop or change any word.`;
+const voiceNote = (lang: string) => `Voice: a calm, dignified, knowledgeable guide speaking to a pilgrim in ${lang}. Measured pace, clear articulation, reassuring. Pronounce Arabic Islamic terms as an Arabic speaker would. Read the text exactly as written.`;
+
+/** Text to speech. Returns MP3 bytes (a short silent WAV in mock mode). `code` is the language code of the text. */
+export async function speak(text: string, lang: string, code?: string): Promise<ArrayBuffer> {
   if (config.mock) return silentWav();
-  const body: any = { model: config.ttsModel, voice: config.ttsVoice, input: text.slice(0, 3500), response_format: 'mp3' };
-  if (config.ttsModel.startsWith('gpt-4o')) body.instructions = `Speak clearly and calmly in ${lang}. Pronounce Islamic terms carefully.`;
+  const arabic = code === 'ar';
+  const body: any = { model: config.ttsModel, voice: arabic ? config.ttsVoiceAr : config.ttsVoice, input: text.slice(0, 3500), response_format: 'mp3' };
+  if (config.ttsModel.startsWith('gpt-4o')) body.instructions = arabic ? VOICE_AR : voiceNote(lang);
   const r = await fetch('https://api.openai.com/v1/audio/speech', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${config.keys.openai}` }, body: JSON.stringify(body), signal: AbortSignal.timeout(40_000) });
   if (!r.ok) throw new ModelError('openai', r.status, `tts ${r.status}: ${(await r.text()).slice(0, 300)}`);
   return r.arrayBuffer();

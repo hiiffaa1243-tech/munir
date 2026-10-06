@@ -7,6 +7,7 @@ import { t } from '@/lib/i18n';
 import { embed } from '@/lib/models';
 import { QUOTE_MIN, quoteCoverage, enforceCitations, findVerified, generate, retrieve, translateStrings, understand, verifyWithModel, type Gen, type Retrieved, type VerifyItem } from './steps';
 import type { Answer, AskInput, CaseItem, SourceRef, StageCb, Statement, Understanding } from './types';
+import { PROMPT_VERSION } from './prompts';
 
 const DEADLINE_MS = 50_000; // the platform limit is 60 s
 const WIDEN_SIM_MIN = 0.45;       // the composer abstained although retrieval was confident: worth one look at a wider context
@@ -27,6 +28,35 @@ export const sameWording = (x: string, y: string): boolean => {
   const n = (s: string) => normalizeArabic(s.normalize('NFKC').toLowerCase()).replace(/[\p{P}\p{S}\s]+/gu, ' ').trim();
   return n(x) === n(y);
 };
+
+/** A question reduced to what a listener hears: no punctuation, case, diacritics or hamza spelling. */
+const wordingKey = (s: string) => normalizeArabic(s.normalize('NFKC').toLowerCase()).replace(/[\p{P}\p{S}\s]+/gu, ' ').trim();
+
+const RECALL_DAYS = 14;
+/**
+ * Consistency memory. An answer that already passed every gate is given again when the same question comes back,
+ * whether in the visitor's own wording (`text`) or as the same normalised question (`qEn`), in the same language.
+ * Without it the same question could be answered once and referred the next time, because two model runs never
+ * agree perfectly. Only answers are recalled, never referrals: a referred question is always tried afresh.
+ * Answers made under another prompt version, approximate translations and withdrawn published answers are skipped.
+ */
+async function recall(text: string | null, qEn: string | null, lang: string | null): Promise<{ row: any; answer: Answer } | null> {
+  try {
+    const since = new Date(Date.now() - RECALL_DAYS * 864e5).toISOString();
+    const { data } = await sb().from('interactions').select('id,lang,q_text,q_en').eq('is_eval', false).in('tier', ['grounded', 'verified']).gte('created_at', since).order('created_at', { ascending: false }).limit(400);
+    const key = wordingKey(text ?? qEn ?? ''); if (!key) return null;
+    const ids = ((data ?? []) as any[]).filter(r => (!lang || r.lang === lang) && wordingKey((text ? r.q_text : r.q_en) ?? '') === key).slice(0, 4).map(r => r.id);
+    for (const id of ids) {
+      const { data: row } = await sb().from('interactions').select('id,lang,q_en,q_ar,level,stage,nusuk,tier,answer,chunk_ids,va_id,flags').eq('id', id).maybeSingle();
+      const r = row as any; const a = r?.answer as Answer | undefined;
+      if (!a || r.flags?.pv !== PROMPT_VERSION || a.approx_translation) continue;
+      if (!(a.summary || a.claims?.length || a.cases?.length)) continue;
+      if (r.va_id) { const { data: va } = await sb().from('verified_answers').select('status').eq('id', r.va_id).maybeSingle(); if ((va as any)?.status !== 'published') continue; }
+      return { row: r, answer: a };
+    }
+  } catch { /* the memory is a convenience: on any error the question simply runs through the pipeline */ }
+  return null;
+}
 
 /** The honorific ligatures (ﷺ) have no glyph on many screens: every string that leaves the pipeline has them written out. */
 export function cleanAnswer(a: Answer): void {
@@ -66,6 +96,18 @@ export async function ask(input: AskInput, onStage: StageCb = () => {}): Promise
 
   const hint = input.langHint && (isLang(input.langHint) || ['tr', 'bn'].includes(input.langHint)) ? input.langHint : 'en';
 
+  // The same question, answered before: the answer that passed every gate then is given again now.
+  const remembered = !input.isEval && !input.trace && !input.clarified;
+  const serve = async (hit: { row: any; answer: Answer }): Promise<Answer> => {
+    const r = hit.row; const old = hit.answer;
+    const uu: Understanding = { lang: r.lang ?? old.lang, q_en: r.q_en ?? '', q_ar: r.q_ar ?? '', in_scope: true, level: r.level ?? 'b', personal_case: false, nusuk: r.nusuk ?? 'both', stage: r.stage ?? 'general', injection_suspected: false };
+    const a2: Answer = { ...old, interaction_id: undefined, ticket: undefined, timings: {}, flags: { pv: PROMPT_VERSION, recalled: r.id, verify: (old.flags as any)?.verify } };
+    T.total = Date.now() - t0; a2.timings = T;
+    await persist(input, uu, a2, r.chunk_ids ?? [], r.va_id ?? null);
+    return a2;
+  };
+  if (remembered) { const hit = await timed('recall', () => recall(input.text.trim(), null, null)); if (hit) return serve(hit); }
+
   // A question the system cannot even classify is recorded and referred, never dropped.
   onStage('understand');
   let u: Understanding;
@@ -95,10 +137,14 @@ export async function ask(input: AskInput, onStage: StageCb = () => {}): Promise
     if (fix && fix.length <= config.limits.maxQuestionChars && !sameWording(fix, input.text)) return early('confirm', 'n_confirm', fix);
   }
 
+  // Asked in other words but understood as the very same question, in the same language: also recalled.
+  if (remembered && u.in_scope && u.q_en.trim() && !u.personal_case) { const hit = await timed('recall', () => recall(null, u.q_en.trim(), outLang)); if (hit) return serve(hit); }
+
   let finished = false;
   const done = async (chunkIds: string[] = [], vaId: string | null = null) => {
     if (finished) return a;   // the deadline already answered for this request
     cleanAnswer(a);   // before the answer is declared finished: if tidying throws, the request ends in a recorded referral
+    a.flags.pv = PROMPT_VERSION;
     finished = true; T.total = Date.now() - t0; a.timings = T; await persist(input, u, a, chunkIds, vaId); return a;
   };
   const stage = (s: string) => { if (!finished) onStage(s); };
