@@ -14,8 +14,8 @@ const WIDEN_BEFORE_MS = 18_000;   // ...but only while there is time left for it
 const WIDE_TOP_K = 14;
 const EXPLAIN_SHORT_CHARS = 260;   // a published answer shorter than this is a bare ruling
 const EXPLAIN_SIM_BELOW = 0.8;      // below this the new question is not just a rewording of the stored one
-const EXPLAIN_BEFORE_MS = 25_000; // no stage of an explanation starts after this much of the request has passed
-const EXPLAIN_HARD_MS = 38_000;   // and the published answer is never held back longer than this
+const EXPLAIN_BEFORE_MS = 14_000; // no stage of an explanation starts after this much of the request has passed
+const EXPLAIN_HARD_MS = 22_000;   // and the published answer is never held back longer than this
 const clip = (s: string, n: number) => (s.length > n ? s.slice(0, n).replace(/\s+\S*$/, '') + '…' : s);
 
 function baseAnswer(u: Understanding, outLang: string): Answer {
