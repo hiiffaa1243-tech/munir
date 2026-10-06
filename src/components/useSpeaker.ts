@@ -67,7 +67,7 @@ function groups(parts: SayPart[]): SayPart[][] {
   return out;
 }
 async function fetchAudio(text: string, lang: string, signal: AbortSignal): Promise<string> {
-  const r = await fetch('/api/tts', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: text.slice(0, 3800), lang }), signal });
+  const r = await fetch('/api/tts', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: text.slice(0, 2400), lang }), signal });
   if (!r.ok) throw new Error(`tts ${r.status}`);
   const b = await r.blob();
   if (b.size < 64) throw new Error('tts empty');

@@ -24,7 +24,7 @@ export async function POST(req: Request) {
     claim = row;
   } else if (b.code) {
     // Hand-typed codes are guessable in principle, so failed attempts are tightly limited per address.
-    if (!rateLimit(`code:${ip}`, 5, 10 * 60_000)) return bad('too many attempts', 429);
+    if (!rateLimit(`code:${ip}`, 30, 10 * 60_000)) return bad('too many attempts', 429);
     const { data } = await db.from('claims').select('nonce,session_id,used,expires_at').eq('code', normalizeCode(b.code)).maybeSingle();
     const row = data as any;
     if (!row || row.used || new Date(row.expires_at).getTime() < Date.now()) return bad('expired or invalid', 410);
@@ -46,7 +46,8 @@ export async function POST(req: Request) {
   const notebookId = (nb as any).id as string;
   const upd = await db.from('claims').update({ used: true }).eq('nonce', claim!.nonce).eq('used', false).select('nonce');
   if (upd.error || !(upd.data as any[])?.length) return bad('already used', 410);
-  await db.from('interactions').update({ notebook_id: notebookId }).eq('id', interactionId).is('notebook_id', null);
+  const att = await db.from('interactions').update({ notebook_id: notebookId }).eq('id', interactionId).is('notebook_id', null);
+  if (att.error) return bad('could not save the answer', 500);
   await db.from('tickets').update({ notebook_id: notebookId }).eq('interaction_id', interactionId).is('notebook_id', null);
   return json({ ok: true });
 }

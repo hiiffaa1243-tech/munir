@@ -13,11 +13,12 @@ const NAME_TO_CODE: Record<string, string> = { arabic: 'ar', english: 'en', urdu
  * of the screen: a hint, never a constraint, because a pilgrim may speak any language at any screen.
  */
 export async function POST(req: Request) {
-  // Interim captions arrive every couple of seconds, so the allowance per address is generous.
-  if (!rateLimit(`stt:${clientIp(req)}`, 90)) return bad('too many requests', 429);
   let form: FormData;
   try { form = await req.formData(); } catch { return bad('invalid request'); }
   const partial = ['1', 'true'].includes(String(form.get('partial') ?? ''));
+  // Interim captions arrive every couple of seconds and have their own allowance, so they can never crowd out the
+  // final transcript of a real question from the same address (several kiosks may share one).
+  if (!rateLimit(`${partial ? 'stt-p' : 'stt'}:${clientIp(req)}`, partial ? 90 : 40) || !rateLimit('stt:all', 600)) return partial ? json({ text: '' }) : bad('too many requests', 429);
   const hint = String(form.get('lang') ?? '').toLowerCase().slice(0, 5);
   const quiet = () => json({ text: '' });
   const file = form.get('audio') as File | null;

@@ -118,7 +118,9 @@ async function callRole(role: Role, rcBase: RoleConfig, msgs: ChatMsg[], json: b
         lastErr = e;
         if (isModelMissing(e)) { chosen.delete(key); break; }   // try the next candidate
         if (e instanceof ModelError && !isTransient(e)) throw e;
-        if ((e as Error)?.name === 'AbortError') { lastErr = new ModelError(rc.provider, 504, `${rc.provider} timed out`); break; } // no second wait on a timeout
+        // A provider that timed out is stalling: its other candidate models would stall too, so the role fails over at once
+        // (for the verifier, to its declared fallback) instead of spending the visitor's time on a second wait.
+        if ((e as Error)?.name === 'AbortError') throw new ModelError(rc.provider, 504, `${rc.provider} timed out`);
         // An overloaded or rate-limited model: with other candidates listed, move on at once instead of waiting on it.
         if (models.length > 1) { chosen.delete(key); break; }
         // A single-model role waits out a rate limit instead of failing the question.

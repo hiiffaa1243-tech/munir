@@ -98,7 +98,8 @@ export async function ask(input: AskInput, onStage: StageCb = () => {}): Promise
   let finished = false;
   const done = async (chunkIds: string[] = [], vaId: string | null = null) => {
     if (finished) return a;   // the deadline already answered for this request
-    finished = true; T.total = Date.now() - t0; a.timings = T; cleanAnswer(a); await persist(input, u, a, chunkIds, vaId); return a;
+    cleanAnswer(a);   // before the answer is declared finished: if tidying throws, the request ends in a recorded referral
+    finished = true; T.total = Date.now() - t0; a.timings = T; await persist(input, u, a, chunkIds, vaId); return a;
   };
   const stage = (s: string) => { if (!finished) onStage(s); };
 

@@ -92,7 +92,7 @@ After run 2 the failures were read one by one and the system was changed in gene
 | Answers with a checkable source | 100% | 100% | 100% | 1.7% |
 | Glossary integrity | 94.8% | 95.4% | 97.4% | not applicable |
 | Latency, median / 90th percentile | 4.7 s / 10.8 s | 6.0 s / 16.8 s | 14.4 s / 23.9 s | not measured |
-| Stability on a repeat run | not measured | 80.8% | STABILITY_PLACEHOLDER | not measured |
+| Stability on a repeat run | not measured | 80.8% | see the live `/eval` page (run 5) | not measured |
 
 | Category | n | Run 1 | Run 2 | Run 4 |
 |---|---|---|---|---|

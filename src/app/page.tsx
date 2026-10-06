@@ -131,11 +131,26 @@ export default function ServicePoint() {
 
   useEffect(() => () => stopSpeech(), []); // leaving the page ends the reading
 
+  // Non-questions heard in a row while hands-free (see the answer effect). Any touch or key starts the count again.
+  const idleHits = useRef(0);
+  const voiceNow = useRef(voice); voiceNow.current = voice;
+  useEffect(() => {
+    const touched = () => { idleHits.current = 0; };
+    // A hidden tab must not keep the microphone open or keep uploading audio.
+    const hidden = () => { if (document.hidden) { setMicOk(false); voiceNow.current.stop(); stopSpeech(); } };
+    window.addEventListener('pointerdown', touched); document.addEventListener('visibilitychange', hidden);
+    return () => { window.removeEventListener('pointerdown', touched); document.removeEventListener('visibilitychange', hidden); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // A new answer is read aloud as soon as it is on screen, with no extra press.
   useEffect(() => {
     const a = asker.answer; if (!a) return;
     voice.clearCaption();
     if (a.tier === 'noquestion') {
+      // Three utterances in a row that were not questions, with nobody touching the screen: the hall is noisy, not asking.
+      // Hands-free listening stops and waits for one tap, so an unattended kiosk does not keep transcribing the room.
+      if (auto && ++idleHits.current >= 3) { idleHits.current = 0; setMicOk(false); voice.stop(); }
       // Not a question: a gentle line on the stage, no card. A hands-free kiosk stays silent so that chatter nearby does not make it talk.
       const line = a.notice || t(a.lang, 'n_noquestion');
       if (auto && prev) return; // the earlier answer is still being read on screen: leave it in peace
@@ -143,6 +158,7 @@ export default function ServicePoint() {
       if (!auto && sound) speaker.speak({ key: 'stage', lang: a.lang, parts: [{ id: 'note', text: line }] });
       return;
     }
+    idleHits.current = 0;
     if (a.tier === 'confirm' && a.suggest) setText(a.suggest);
     const wantsReply = a.tier === 'confirm' || a.tier === 'clarify';
     // After "Did you mean ...?" Munir listens for the reply. Hands-free does this by itself (see below).

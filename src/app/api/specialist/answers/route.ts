@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { bad, isSpecialist, json } from '@/lib/http';
 import { audit, sb, vec } from '@/lib/db';
-import { embedOne, toEnglish, translateStrings, understand, verify } from '@/lib/pipeline/steps';
+import { embedOne, toEnglish, translateStrings, understand, verifyWithModel } from '@/lib/pipeline/steps';
 import { hasArabic } from '@/lib/arabic';
 
 export const runtime = 'nodejs';
@@ -39,7 +39,8 @@ export async function POST(req: Request) {
   try {
     const [u, en] = await Promise.all([understand(b.question), toEnglish([b.answer, b.source_quote])]);
     const [answerEn, quoteEn] = en;
-    const [check] = await verify([{ id: 0, statement: answerEn, passages: [quoteEn] }]);
+    const vr = await verifyWithModel([{ id: 0, statement: answerEn, passages: [quoteEn] }]);
+    const check = vr.results[0];
     if (check.verdict !== 'supported') {
       await audit(b.author_name, 'answer_rejected', b.question.slice(0, 120), { verdict: check.verdict, reason: check.reason });
       return json({ published: false, verdict: check.verdict, reason: check.reason }, 200);
@@ -50,7 +51,7 @@ export async function POST(req: Request) {
     const ins = await db.from('verified_answers').insert({
       q_canon: u.q_en || b.question, q_ar: u.q_ar, q_embedding: vec(emb), answer: b.answer, answer_lang: answerLang, answer_en: answerEn,
       translations: { [answerLang]: b.answer, en: answerEn }, source_title: b.source_title, source_locator: b.source_locator || null, source_quote: b.source_quote,
-      author_name: b.author_name, verification: { verdict: check.verdict, reason: check.reason, at: new Date().toISOString() },
+      author_name: b.author_name, verification: { verdict: check.verdict, reason: check.reason, at: new Date().toISOString(), model: vr.model, independent: !vr.fallback },
     }).select('id').single();
     if (ins.error) return bad(ins.error.message, 500);
     const vaId = (ins.data as any).id as string;

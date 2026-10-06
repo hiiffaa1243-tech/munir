@@ -9,7 +9,7 @@ export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 const Body = z.object({
-  text: z.string().trim().min(2).max(config.limits.maxQuestionChars),
+  text: z.string().trim().min(2).max(config.limits.maxQuestionChars * 2 + 100),   // a clarification travels with the question it answers
   lang: z.string().max(5).optional(),
   session_id: z.string().max(80).optional(),
   kiosk: z.string().max(40).optional(),
@@ -22,6 +22,7 @@ const Body = z.object({
 export async function POST(req: Request) {
   let body: z.infer<typeof Body>;
   try { body = Body.parse(await req.json()); } catch { return bad('invalid request'); }
+  if (!body.clarified && body.text.length > config.limits.maxQuestionChars) body.text = body.text.slice(0, config.limits.maxQuestionChars);
   if (!rateLimit(`ask:${body.session_id ?? clientIp(req)}`, config.limits.askPerMinute) || !rateLimit(`ask-ip:${clientIp(req)}`, config.limits.askPerMinute * 3)) return bad('too many requests', 429);
 
   // A question asked from the notebook is attached to that notebook directly.

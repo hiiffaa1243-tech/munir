@@ -29,7 +29,9 @@ export async function GET() {
   return json({
     total: rows.length, by_tier: count(r => r.tier), by_lang: count(r => r.lang), by_stage: count(r => r.stage), by_nusuk: count(r => r.nusuk), by_kiosk: count(r => r.kiosk ?? 'phone'), by_hour_utc: hours,
     knowledge_gaps: Object.entries(gapByStage).map(([stage, v]) => ({ stage, ...v, rate: v.total ? v.referred / v.total : 0 })).sort((a, b) => b.referred - a.referred),
-    top_questions: [...topQ.values()].filter(g => sp || (g.askers.size >= K && !g.personal)).sort((a, b) => b.n - a.n).slice(0, 15).map(g => ({ q_ar: g.q_ar, q_en: g.q_en, n: g.n, langs: [...g.langs], tier: g.tier })),
+    // The public list shows a question only when different visitors asked it, it is not a personal case, and it was
+    // answered from the sources: text that the service declined or referred is never echoed on a public page.
+    top_questions: [...topQ.values()].filter(g => sp || (g.askers.size >= K && !g.personal && (g.tier === 'grounded' || g.tier === 'verified'))).sort((a, b) => b.n - a.n).slice(0, 15).map(g => ({ q_ar: g.q_ar, q_en: g.q_en, n: g.n, langs: [...g.langs], tier: g.tier })),
     top_referred: (sp ? referred.slice(0, 15) : []).map(r => ({ q_ar: r.q_ar, q_en: r.q_en, lang: r.lang, reason: r.flags?.refer_reason ?? null })),
     latency_ms: { p50: pct(lat, 0.5), p90: pct(lat, 0.9) }, open_tickets: openTickets ?? 0, referred_total: referred.length, k_threshold: K,
   });

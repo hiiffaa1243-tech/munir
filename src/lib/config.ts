@@ -48,7 +48,7 @@ export const config = {
     retrieveSimMin: num('RETRIEVE_SIM_MIN', 0.28), // answerability gate on best chunk cosine
     topK: num('RETRIEVE_TOP_K', 8),
   },
-  limits: { maxQuestionChars: 500, maxAudioBytes: 2_500_000, askPerMinute: 20 },
+  limits: { maxQuestionChars: 500, maxAudioBytes: 1_200_000, askPerMinute: 20 },
 };
 
 export const SUPPORTED_LANGS = ['ar', 'en', 'ur', 'id', 'fr', 'hi', 'zh'] as const;
