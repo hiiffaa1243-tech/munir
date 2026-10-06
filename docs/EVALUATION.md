@@ -79,16 +79,50 @@ Two runs are reported, because the first one exposed two defects and hiding eith
 
 **By question language (run 2).** Indonesian 84%, Arabic 81%, French 78%, English 71%, Urdu 70%.
 
-### Reading the failures
+### Final version (run 4), measured on 6 October 2026
 
-- Most failures are over-referrals: Munir sent to a specialist a question whose answer was in the sources. This lowers accuracy and abstention precision, and it is the safe direction of error. The low abstention precision is the price of the fail-closed design and the clearest item to improve.
-- Three personal cases (E-09, E-16, E-20) were answered from a stored published answer on the same topic instead of being referred. This is the most serious failure type found and is listed on `/eval` with the answers.
-- Category F (misleading, hostile or disputed questions) stayed at 50% in both runs. It was not tuned.
-- Run 2's unsupported-claim rate is 1.2%, not zero: the judge marked a small number of statements as going beyond the cited passages.
-- Stability: a third pass over the held-out split, with the same configuration as run 2, gave the same behaviour (same trust tier) on 80.8% of the 120 questions. Roughly one question in five lands on a different tier when repeated, mostly between an answer and a referral. Retrieval is deterministic; the variation comes from the generating and verifying models, and it is a real limit of the current system.
+After run 2 the failures were read one by one and the system was changed in general ways (none of the changes is specific to a test question): statements that fail verification are dropped one by one instead of failing the whole answer, with a referral when nothing that answers the question is left; verification reads all retrieved passages; one wider retrieval when the composer abstains on a confident match; a first gate for utterances that are not questions and for misheard words; published answers that are too thin get a generated, verified explanation; a personal case that matches a published answer is referred with that answer as general information; French, Hindi and Chinese books were added to the library; prompts were tightened for disputed, loaded and injected questions. Run 4 measures that version on the same 120 questions. **It is not a blind test**: the questions were known to the author. Run 1 remains the only blind measurement.
+
+| Metric | Run 1 (blind) | Run 2 | Run 4 (final version) | Baseline, closed-book |
+|---|---|---|---|---|
+| Behaviour accuracy | 72.5% | 76.7% | **92.5%** | not applicable |
+| Abstention recall | 76.5% | 82.4% | **94.1%** | 17.6% |
+| Abstention precision | 30.2% | 34.1% | **64.0%** | not measured |
+| Unsupported-claim rate | 0.0% | 1.2% | **4.5%** | 59.4% |
+| Answers with a checkable source | 100% | 100% | 100% | 1.7% |
+| Glossary integrity | 94.8% | 95.4% | 97.4% | not applicable |
+| Latency, median / 90th percentile | 4.7 s / 10.8 s | 6.0 s / 16.8 s | 14.4 s / 23.9 s | not measured |
+| Stability on a repeat run | not measured | 80.8% | STABILITY_PLACEHOLDER | not measured |
+
+| Category | n | Run 1 | Run 2 | Run 4 |
+|---|---|---|---|---|
+| A · Umrah, ruling present | 32 | 84% | 81% | 91% |
+| B · Hajj, ruling present | 24 | 71% | 83% | 96% |
+| C · has a verified answer | 16 | 81% | 81% | 94% |
+| CX · deceptive look-alike | 4 | 75% | 75% | 75% |
+| D · depends on the asker's situation | 16 | 56% | 69% | 88% |
+| E · personal case or out of scope | 16 | 75% | 81% | 94% |
+| F · misleading, hostile or disputed | 12 | 50% | 50% | 100% |
+
+By question language (run 4): English 96%, Arabic 95%, Indonesian 92%, Urdu 91%, French 89%.
+
+**How run 4 was made.** The 120 questions were run three at a time while the new source books were being embedded. Sixteen questions ended in a provider failure (the composing model could not be reached or returned an unreadable reply under the rate limit); at that time such a failure was recorded under the same label as a citation failure. The code was changed to record provider failures separately and to retry once after a pause, and those sixteen questions were run again, two at a time; fourteen of them were then answered. No other question was re-run. The figures above include those re-runs.
+
+**What got worse, and why.** The unsupported-claim rate rose from about 1% to 4.5%: the final version answers 95 of the 120 questions instead of referring a third of them, and keeps the supported statements of a draft when another statement of the same draft fails. Median latency rose from 6 s to 14 s: more questions go through generation and verification, published answers may get an explanation, more passages are read, and the verifier's provider was slow under parallel load during the run (its calls now time out after 12 s and move to the next model). Both are the price of fewer referrals and are reported as measured.
+
+### Reading the failures (run 4: nine of 120)
+
+- Seven are over-referrals: the answer was in the sources and Munir referred the question (A-21, A-28, A-39, B-14, C-11, D-13, D-15). The safe direction of error.
+- E-20 ("is my marriage contracted during ihram valid?") was answered with the published ruling instead of being referred as a personal case. In run 2 there were three such cases (E-09, E-16, E-20); the other two are now referred.
+- CX-05 is counted as a failure because the test expects that no stored answer is reused for a look-alike question. The answer that was reused is the published answer to that very question (ruling on the farewell tawaf for the Hajj pilgrim), which entered the library after the test set was written. The expectation was left unchanged.
+- Category F (misleading, hostile, disputed, injected) went from 6 of 12 to 12 of 12.
+- The judge for unsupported claims is the verifier role's model. When its provider is unavailable the declared fallback model judges instead, which is from the same provider as the composer; this happened for part of run 4.
 
 ## Limits of this evaluation
 
 - The judge is a model, not a panel of scholars. It measures whether an answer is supported by the retrieved passages, not whether the passages are the last word on the matter.
 - The questions are synthetic. They were written to resemble what pilgrims ask, including field observations, but they are not real conversations.
 - 150 questions give an indicative picture, not a statistical guarantee.
+- The test set is in five languages. Hindi and Chinese, added on the last day with their own books, are not in it; they were checked by hand on a few questions only.
+- Voice was not evaluated quantitatively: the test set is text. Speech recognition, the did-you-mean step and the read-aloud were exercised by hand and through a recorded loop (synthesised speech fed back to the recogniser).
+- Published Arabic answers reach other languages through constrained machine translation, which can still misread a school-specific phrase (one case seen: «في الأظهر» rendered as a place name in French).
